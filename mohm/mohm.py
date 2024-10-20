@@ -64,7 +64,6 @@ class CalData(object):
 
     def cal(self, io, ao, ag = 1.0):
         stritem, offset = self._convert("OFFSETS", 0.0, io)
-        #print('calibrate io: {} ao: {} ag: {}'.format(stritem, ao, ag))
         if 'in' in stritem:
             scale = self.scale(stritem)
             outo = offset * self.volts_per_step(stritem) + ao * scale
@@ -81,7 +80,6 @@ class CalData(object):
 
     def reverse(self, io, so, sg = 1.0):
         stritem, offset = self._convert("OFFSETS", 0.0, io)
-        #print('calibrate reverse io: {} so: {} sg: {}'.format(io, so, sg))
         if 'in' in stritem:
             scale = self.scale(stritem)
             ino = (so - offset * self.volts_per_step(stritem)) / scale
@@ -98,7 +96,6 @@ class CalData(object):
 
     def dc(self, io, data):
         stritem, offset = self._convert("OFFSETS", 0.0, io, cuo = self._curve_set)
-        #print('calibrate curve io: {} data: {}'.format(stritem, ao))
         if 'in' in stritem:
             discard, scale = self._convert("SCALES", 1.0, stritem, cuo = self._curve_set)
             outo = offset + data * scale
@@ -118,7 +115,6 @@ class CalData(object):
 
     def dc_raw(self, io, data):
         stritem, offset = self._convert("OFFSETS", 0.0, io)
-        #print('calibrate raw: {} io: {}'.format(data, io))
         if 0 < len(stritem):
             outo = (data - offset) * self.volts_per_step(stritem)
         else:
@@ -153,7 +149,6 @@ class CalData(object):
                     else:
                         io[k] = self.data[k]
 
-                #print(io)
                 fh.write( json.dumps( io ) )
 
     def _get_val(self, callist, default, val, cuo):
@@ -163,7 +158,6 @@ class CalData(object):
         if type(stritem) is str and hasattr(self, stritem):
             rtn = self.data[callist][getattr(self, stritem) + cuo]
             found = True
-            #print('io port: {} rtn: {}'.format(stritem, rtn))
         else:
             stritem = ''
 
@@ -176,7 +170,6 @@ class CalData(object):
             attrs = dir(val)
             if 'output_direct' in attrs:
                 found, stritem, rtn = self._get_val(callist, default, val.output_direct, cuo)
-                #print('output_direct: {} rtn: {}'.format(val.output_direct, rtn))
 
             if 'input' in attrs:
                 if not found:
@@ -410,9 +403,6 @@ def start_logging():
     logger.info('pyrpl version: {}'.format(pyrpl.__version__))
 
 def prepare_to_show_plot(p):
-    # cleanup to remove the qt framework
-    # del p
-
     import matplotlib
     for i in range(1):
         try:
@@ -1064,7 +1054,6 @@ def print_results(t):
                                                 abs(cal[idxs[0][0], cref]) + abs(t.fs - t.sa.frequencies[amaxidx_2])
                                                 ],], dtype = float)
 
-                # print(results.shape, result.shape)
                 t.results = np.concatenate((results, result))
     else:
         amaxidx_lo, amaxidx, amaxidx_hi = characterise_spectrum(t.spec_ch1, t.sa.frequencies,
@@ -1086,7 +1075,7 @@ def plotspec(t):
     # plot
     prepare_to_show_plot(t.p)
 
-    svg = True
+    svg = False
     if svg:
         import matplotlib
 

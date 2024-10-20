@@ -425,9 +425,6 @@ def start_logging():
     logger.info('pyrpl version: {}'.format(pyrpl.__version__))
 
 def prepare_to_show_plot(p):
-    # cleanup to remove the qt framework
-    # del p
-
     import matplotlib
     for i in range(1):
         try:
