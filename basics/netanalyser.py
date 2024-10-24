@@ -32,7 +32,8 @@ if __name__ == '__main__':
     # rbw: cutoff frequency used in the iq low-pass filter (bandwidth)
     # rbw value is related to avg_per_point and time_per_point
 
-    na.setup(start_freq=1e3, stop_freq=62.5e6, points=1001, rbw=1000, avg_per_point=1,
+    na.setup(start_freq=1e3, stop_freq=62.5e6, points=1001, rbw=1000,
+             average_per_point=1,
              amplitude=0.2, input='iq2', output_direct='off', acbandwidth=0)
 
     # fetch the curve iq2 -> iq2
