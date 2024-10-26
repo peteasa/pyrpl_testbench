@@ -16,11 +16,14 @@ if __name__ == '__main__':
         TC = None # alternative is to specify the time constant: for example 1us
         if TC is None:
             # alternative is to specify the cut off frequency: for example 1e6 Hz
-            fc = 1.59235e6
+            fc = 1.59235e5
         else:
             fc = 1 / (2 * np.pi * TC)
 
-        loops = round(125e6 / fc)
+        # reduce the number of loops to increase the sampling rate
+        # choose a suitable divisor based on the type of filter and the cutoff frequency selected
+        sampling_rate_adjustment = 1.0 / 160.0
+        loops = round(sampling_rate_adjustment * 125e6 / fc)
         if 1023 < loops:
             loops = 1023
             print('frequency / time constant not possible - adjusted')
@@ -28,14 +31,12 @@ if __name__ == '__main__':
             loops = 3
             print('frequency / time constant not possible - adjusted')
 
-        fc = 125e6 / loops
+        fc = sampling_rate_adjustment * 125e6 / loops
         TC = 1 / (2 * np.pi * fc)
         omegac = 1 / TC
 
-        print('filter cutoff frequency: {} time constant: {} us'.format(fc, TC * 1e6))
+        print('filter cutoff frequency: {:0.3f} time constant: {:0.3f} us'.format(fc, TC * 1e6))
 
-        rbw = 1000
-        points = 1001
         if True:
             # low pass filter at f
             stop_freq = 3e7
@@ -113,7 +114,7 @@ if __name__ == '__main__':
                       zeros=zeros, poles=poles,
                       loops=loops)
 
-        print('Filter sampling frequency: {} MHz'.format(125./iir.loops))
+        print('Filter sampling frequency: {:0.3f} MHz cut off frequency: {} MHz'.format(125./iir.loops, fc / 1e6))
 
         # useful diagnostic functions
         print('IIR on: {}'.format(iir.on))
@@ -126,6 +127,8 @@ if __name__ == '__main__':
         print('IIR overflows before: {}'.format(iir.overflow))
 
         # measure tf of iir filter
+        rbw = 1000
+        points = 1001
         iir.input = na.iq
         na.setup(start_freq = 1e4, stop_freq = stop_freq, rbw = rbw,
                  points = points,
@@ -136,14 +139,13 @@ if __name__ == '__main__':
 
         tf = na.single()
 
-        # check if the filter is ok
+        # check if the filter is still ok after measuring the transfer function
         print('IIR overflows after: {}'.format(iir.overflow))
 
         # retrieve designed transfer function
         designdata = iir.transfer_function(na.frequencies)
 
-        #plot with design data
-
+        # plot the design data
         import matplotlib
         matplotlib.rcParams['figure.figsize'] = (10, 6)
 
