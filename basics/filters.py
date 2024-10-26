@@ -111,8 +111,7 @@ if __name__ == '__main__':
         else:
             iir.setup(gain = gain,
                       zeros=zeros, poles=poles,
-                      loops=loops,
-                      plot=True)
+                      loops=loops)
 
         print('Filter sampling frequency: {} MHz'.format(125./iir.loops))
 
