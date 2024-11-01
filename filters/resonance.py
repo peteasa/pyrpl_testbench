@@ -20,9 +20,9 @@ if __name__ == '__main__':
     # setup a simple iir transfer function
     lowpass = False
     highpass = True
-    gain = 5.0e-16
+    gain = 5.5e-20
 
-    fc = 9.5e5
+    fc = 2e4
     loops = 3
     samples = round(125e6 / (loops * fc))
     fc = 125e6 / (loops * samples)
@@ -41,13 +41,18 @@ if __name__ == '__main__':
     fc = 125e6 / (loops * samples)
     factor = fc
 
-    print('gain: {:0.1e} filter cutoff frequency: {:0.3f} calibration: {}'.format(gain, fc, calibration))
+    print('gain: {:0.1e} filter cutoff frequency: {:0.3f}'.format(gain, fc))
 
     zeros = np.array([ ], dtype = np.complex128)
     poles = np.array([ ], dtype = np.complex128)
 
-    zeros = np.append( zeros, 0.0 )
-    poles = np.append( poles, 1.0j )
+    zero = -1e-8 / factor
+    angle = 91
+    pole = complex( np.cos(angle * np.pi / 180),
+                    np.sin(angle * np.pi / 180) )
+    #pole = complex( -1.0e-10 / factor, 1.0 )
+    zeros = np.append( zeros, zero )
+    poles = np.append( poles, pole )
 
     zeros = factor * zeros
     poles = factor * poles
@@ -109,8 +114,8 @@ if __name__ == '__main__':
             phases[fmindidx], phases[fmaxdidx]))
     if highpass:
         phases = np.angle(tf, deg = True)
-        phases = phases - phases.max()
-        fminpidx, fmaxpidx = characterise_transfer_function(phases, na.frequencies, -45 < phases)
+        phases = phases - phases[0]
+        fminpidx, fmaxpidx = characterise_transfer_function(phases, na.frequencies, phases < -45)
         dbs = 20 * np.log10(np.abs(tf))
         dbs = dbs - dbs.max()
         fmindidx, fmaxdidx = characterise_transfer_function(dbs, na.frequencies, -3 < dbs)
