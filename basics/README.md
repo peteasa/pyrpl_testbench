@@ -30,7 +30,7 @@ TODO
 See `netanalyser.py`
 
 ## class IIR
-TODO
+See `filters.ipynb` and `filters.py`
 
 ## class DspModule
 TODO
