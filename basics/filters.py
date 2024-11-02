@@ -30,12 +30,11 @@ if __name__ == '__main__':
             fc = 1 / (2 * np.pi * TC)
 
         samples = round(125e6 / (loops * fc))
-        fc = 125e6 / (loops * samples)
-        # reduce the number of loops to increase the sampling rate
+        fc = 125e6 / (samples * loops)
+        # reduce the number of loops to increase the number of samples
         # choose a suitable divisor
-        sampling_rate_adjustment = 1.0 / samples
-        loops = round(sampling_rate_adjustment * 125e6 / fc)
-        print('loops: {:0.3f} samples: {:0.0f}'.format(loops, 1.0 / sampling_rate_adjustment))
+        loops = round(125e6 / (samples * fc))
+        print('loops: {:0.3f} samples: {:0.0f}'.format(loops, samples))
         if 1023 < loops:
             loops = 1023
             print('frequency / time constant not possible - adjusted')
@@ -44,7 +43,7 @@ if __name__ == '__main__':
             print('frequency / time constant not possible - adjusted')
 
         fs = 125e6 / loops
-        fc = sampling_rate_adjustment * 125e6 / loops
+        fc = 125e6 / (samples * loops)
         TC = 1 / (2 * np.pi * fc)
         omegac = 2 * np.pi * fc / fs
 
