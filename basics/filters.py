@@ -43,9 +43,10 @@ if __name__ == '__main__':
             loops = 3
             print('frequency / time constant not possible - adjusted')
 
+        fs = 125e6 / loops
         fc = sampling_rate_adjustment * 125e6 / loops
         TC = 1 / (2 * np.pi * fc)
-        omegac = 1 / TC
+        omegac = 2 * np.pi * fc / fs
 
         print('filter cutoff frequency: {:0.3f} time constant: {:0.3f} us'.format(fc, TC * 1e6))
 
@@ -53,12 +54,12 @@ if __name__ == '__main__':
             # low pass filter at f
             stop_freq = 3e7
             zeros = np.array([], dtype = np.complex128)
-            poles = np.array([ omegac * complex( -1, 0 ) ], dtype = np.complex128)
+            poles = np.array([ fc * complex( -1, 0 ) ], dtype = np.complex128)
         elif highpass:
             # high pass filter at f
             stop_freq = 3e7
-            zeros = np.array([ omegac * complex( -0.00001 / omegac, 0 ) ], dtype = np.complex128)
-            poles = np.array([ omegac * complex( -1, 0 ) ], dtype = np.complex128)
+            zeros = np.array([ fc * complex( -0.00001 / fc, 0 ) ], dtype = np.complex128)
+            poles = np.array([ fc * complex( -1, 0 ) ], dtype = np.complex128)
         elif False:
             # 3rd order butterworth filter
             stop_freq = 3e7
@@ -71,10 +72,10 @@ if __name__ == '__main__':
             for p in range(nps):
                 print('angle: {}'.format(angle))
                 imag = np.cos(angle * np.pi / 180)
-                if abs(omegac * imag) < 1.0:
+                if abs(fc * imag) < 1.0:
                     imag = 0
 
-                poles = np.append(poles, omegac * complex( - np.sin(angle * np.pi / 180),
+                poles = np.append(poles, fc * complex( - np.sin(angle * np.pi / 180),
                                                imag ) )
 
                 angle = angle + th # +0.000000001
@@ -84,11 +85,11 @@ if __name__ == '__main__':
             # notch filter at f
             angle = 68
 
-            p_zero = omegac * complex( 0, 1 )
-            n_zero = omegac * complex( 0, -1 )
-            p_pole = omegac * complex( -np.cos(angle * np.pi / 180),
+            p_zero = fc * complex( 0, 1 )
+            n_zero = fc * complex( 0, -1 )
+            p_pole = fc * complex( -np.cos(angle * np.pi / 180),
                                       np.sin(angle * np.pi / 180) )
-            n_pole = omegac * complex( -np.cos(angle * np.pi / 180),
+            n_pole = fc * complex( -np.cos(angle * np.pi / 180),
                                       -np.sin((angle + 0.00001) * np.pi / 180) )
             zeros = np.array([ p_zero, n_zero ], dtype = np.complex128)
             poles = np.array([ p_pole, n_pole ], dtype = np.complex128)
@@ -98,19 +99,19 @@ if __name__ == '__main__':
             loops = 2 * nps * 125e6 / fc
             th = 180 / (nps - 1)
             angle = 0
-            pole = omegac * complex( 0, 1 )
+            pole = fc * complex( 0, 1 )
             poles = np.array([], dtype = np.complex128)
             for p in range(nps):
                 print('angle: {}'.format(angle))
-                poles = np.append(poles, pole + omegac * complex( -np.sin(angle * np.pi / 180),
+                poles = np.append(poles, pole + fc * complex( -np.sin(angle * np.pi / 180),
                                                      np.cos(angle * np.pi / 180) ) / 32)
 
                 angle = angle + th
 
             angle = 0.000001
-            pole = omegac * complex( 0, -1 )
+            pole = fc * complex( 0, -1 )
             for p in range(nps):
-                poles = np.append(poles, pole + omegac * complex( -np.sin(angle * np.pi / 180),
+                poles = np.append(poles, pole + fc * complex( -np.sin(angle * np.pi / 180),
                                                      np.cos(angle * np.pi / 180) ) / 32)
 
                 angle = angle + th
@@ -123,8 +124,8 @@ if __name__ == '__main__':
                       zeros=zeros, poles=poles,
                       loops=loops)
 
-        print('poles: {}'.format([po / omegac for po in poles]))
-        print('zeros: {}'.format([ze / omegac for ze in zeros]))
+        print('poles: {}'.format([po / fc for po in poles]))
+        print('zeros: {}'.format([ze / fc for ze in zeros]))
         print('Filter sampling frequency: {:0.3f} MHz cut off frequency: {} MHz'.format(125./iir.loops, fc / 1e6))
 
         # useful diagnostic functions
