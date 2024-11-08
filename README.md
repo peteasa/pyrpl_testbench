@@ -5,7 +5,7 @@ PyRPL (Python RedPitaya Lockbox) turns the RedPitaya hardware into a powerful DS
 The testbench allows you to create simple projects with sequences of operations on the modules provided by PyRPL.  An example use of the testbench is demonstrated with the measurement of small resistances (mohm/mohm.py).
 
 ## PyRPL
-The official PyRPL website address is [http://pyrpl.readthedocs.io/](http://pyrpl.readthedocs.io).  The official PyRPL software is available at [https://github.com/RedPitaya/pyrpl](https://github.com/RedPitaya/pyrpl).  Note: at the time of writing the Python3 branch of this repository is not being actively maintained.
+The official PyRPL website address is [http://pyrpl.readthedocs.io/](http://pyrpl.readthedocs.io).  The official PyRPL software is available at [https://github.com/RedPitaya/pyrpl](https://github.com/RedPitaya/pyrpl).  Note: [https://github.com/RedPitaya/pyrpl](https://github.com/RedPitaya/pyrpl) will follow the [https://github.com/pyrpl-fpga/pyrpl](https://github.com/pyrpl-fpga/pyrpl).  So if you want the latest official releases look to those two repositories.  At the time of writing the [https://github.com/pyrpl-fpga/pyrpl](https://github.com/pyrpl-fpga/pyrpl) is more up to date for python3 code.
 
 ## Installation
 The simplest way to install PyRPL on Ubuntu 24.04.1 is to clone https://github.com/peteasa/pyrpl to a suitable location and then checkout the [consolidate_python3 branch](https://github.com/peteasa/pyrpl/tree/consolidate_python3) then install the necessary python libraries
@@ -17,7 +17,7 @@ The folder pyrpl/pyrpl contains the python library modules for PyRPL.  These can
 cd pyrpl_testbench/mohm
 ln -s ../../pyrpl/pyrpl .
 ```
-Other installation methods may not work for Python3.
+Other installation methods may work better for you, some may or may not work for Python3.
 
 ## TestBench API
 One of the objectives of the TestBench is to encourage the creation of small modular methods that perform a specific task, for example the setting up of an PyRPL module.  If this is achieved in any one test design then it will be possible to reuse those modules easily in another test design.  The TestBench and associated classes are kept as simple as possible so that they can be used in multiple designs.
