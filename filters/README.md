@@ -8,6 +8,6 @@ Notably the numerical values used for poles and zeros in many online resources n
 This folder contains examples of filters that have been designed using the pyrpl IIR filter module. so that interested developers can quickly create working examples of the complex filters that they require.
 
 ## Note
-At the time of writing the author is not convinced that the IIR module is free of bugs.  One example of this is that the filters included in this section seem to require gain settings that are remarkably small.  Setting `gain = 1.0` in the pyrpl IIR module rarely produces a working filter.  The only example found so far is that of a low pass filter where `gain = 1.0` works.  As an example the simple high pass filter requires `gain = 1e-9`.  This may be a bug in this implmentation or it may be a bug in the IIR module or it may simply be working as designed.
+At the time of writing the author is not convinced that the IIR module is free of bugs.  One example of this is that the filters included in this section seem to require gain settings that are remarkably small.  Setting `gain = 1.0` in the pyrpl IIR module rarely produces a working filter.  The only example found so far is that of a notch filter.  As an example the simple high pass filter requires `gain = 1e-6` to ensure that the pass band gain is 1.0.  This may be a bug in this implmentation or it may be a bug in the IIR module or it may simply be working as designed.
 
 Comments are always welcome!

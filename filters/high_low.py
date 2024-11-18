@@ -3,6 +3,27 @@
 import numpy as np
 import pyrpl
 
+def loop_sample_freq_list(start, end, count, logdiff, loops, samples = None):
+    if samples is None:
+        samples = round(125e6 / (loops * start))
+
+    freqs = np.array([[],[],[]], dtype = np.float64)
+    for i in range(count):
+        fc = 125e6 / (loops * samples)
+        if end < fc:
+            break
+
+        freqs = np.append(freqs, [[loops], [samples], [fc]], axis = 1)
+        osamples = samples
+        samples = round(125e6 / (loops * 10 ** (np.log10(fc) + logdiff)))
+        if samples < 2:
+            break
+
+        if samples == osamples:
+            samples = samples - 1
+
+    return freqs
+
 def characterise_transfer_function(data, frequencies, condition):
     idxs = np.where(condition)
     fminidx_hi = idxs[0].min()
@@ -10,9 +31,18 @@ def characterise_transfer_function(data, frequencies, condition):
 
     return fminidx_lo, fminidx_hi
 
+def test_loop_sample_freq_list():
+    count = 40
+    logdiff = 0.5
+    loops = 8
+    start = 3e4
+    end = 5e7
+    freqs = loop_sample_freq_list(start, end, count, logdiff, loops)
+    print(freqs.shape, freqs[0,0], freqs[1,0], freqs[2,0], freqs[0,-1], freqs[1,-1], freqs[2,-1])
+
 if __name__ == '__main__':
     HOSTNAME = 'rp-f0bd75'
-    CONFIG = 'filters.resonance'
+    CONFIG = 'filters.high_low'
     p = pyrpl.Pyrpl(config = CONFIG, hostname = HOSTNAME, gui = False)
     na = p.networkanalyzer
     iir = p.rp.iir
@@ -20,16 +50,19 @@ if __name__ == '__main__':
     start_freq = 1e3
     stop_freq = 2e7
 
-    # setup a simple iir transfer function
-    lowpass = True
     highpass = True
+    lowpass = False
 
-    gain_adjust = 3.694144e+19
+    gain_adjust_lp = 3.2509426667e+07
+    gain_adjust_hp = 9.840e+05
+    gain_adjust_twin = 4.982265e-01
 
     gain = 1.0
 
-    fc = 2e4
-    loops = 3
+    loops = 4
+
+    fc = 1.5e5
+
     samples = round(125e6 / (loops * fc))
     fc = 125e6 / (loops * samples)
 
@@ -51,26 +84,28 @@ if __name__ == '__main__':
     print('filter cutoff frequency: {:0.3f} omega_c: {:0.3f} time constant: {:0.3f} us'.format(fc, 2 * np.pi * fc, TC * 1e6))
 
     zeros = np.array([ ], dtype = np.complex128)
-    poles = np.array([ ], dtype = np.complex128)
+    if highpass:
+        zeros = np.array([ fc * complex( -0.000001, 0 ) ], dtype = np.complex128)
 
-    zero = -1e-8 / fc
+    if highpass and lowpass:
+        lmulti = 1.1 ; hmulti = 0.9
+        poles = np.array([ fc * lmulti * complex( -1.0, 0 ), fc * hmulti * complex( -1.0, 0 ) ], dtype = np.complex128)
+        gain_adjust = gain_adjust_lp * gain_adjust_hp * gain_adjust_twin
+        gain = gain / gain_adjust
+    elif lowpass:
+        poles = np.array([ fc * complex( -1.0, 0 ) ], dtype = np.complex128)
+        gain_adjust = gain_adjust_lp
+        gain = gain / gain_adjust
+    elif highpass:
 
-    angle = 91
-    pole = complex( np.cos(angle * np.pi / 180),
-                    np.sin(angle * np.pi / 180) )
-
-    zeros = np.append( zeros, zero )
-    poles = np.append( poles, pole )
-
-    zeros = fc * zeros
-    poles = fc * poles
-
-    gain = gain / gain_adjust
+        poles = np.array([ fc * complex( -1.0, 0 ) ], dtype = np.complex128)
+        gain_adjust = gain_adjust_hp
+        gain = gain / gain_adjust
 
     print('gain: {:0.6e} gain_adjust: {:0.6e}'.format(gain, gain_adjust))
-    iir.setup(zeros = zeros, poles = poles, gain = gain,
-              loops = loops,
-              output_direct = 'off')
+    iir.setup(gain = gain,
+              zeros=zeros, poles=poles,
+              loops=loops)
 
     print('poles: {}'.format([po for po in iir.poles]))
     print('zeros: {}'.format([ze for ze in iir.zeros]))
@@ -95,9 +130,7 @@ if __name__ == '__main__':
     na.setup(start_freq = start_freq, stop_freq = stop_freq, rbw = rbw,
              points = points,
              average_per_point = 1,
-             running_state = 'stopped',
-             trace_average = 1,
-             amplitude = 0.005,
+             amplitude = 0.1,
              input = 'iir', output_direct = 'off',
              logscale=True)
 
@@ -113,52 +146,38 @@ if __name__ == '__main__':
     print('================= Measurements ======================')
     phases = np.angle(tf, deg = True)
     tf_abs = np.abs(tf)
+    tf_max = tf_abs.max()
     amaxidx = np.argmax(tf_abs)
     dbs = 20 * np.log10(tf_abs)
     dbs_max = dbs.max()
-
-    idx_stable = amaxidx - 150 if 150 < amaxidx else amaxidx
-    phases_stable = phases[idx_stable:]
-
-    fmin_phase_rolloff_idx, fmax_phase_rolloff_idx = characterise_transfer_function(
-        phases_stable, na.frequencies[idx_stable:], phases_stable < phases_stable[0] - 1.0)
-    fmin_phase_rolloff_idx = fmin_phase_rolloff_idx + idx_stable
-    fmax_phase_rolloff_idx = fmax_phase_rolloff_idx + idx_stable
-
-    print('filter gain: {:0.3f} db at rolloff frequency {:0.3f} idx: {}'.format(
-        dbs[fmin_phase_rolloff_idx], na.frequencies[fmin_phase_rolloff_idx], fmin_phase_rolloff_idx))
-    print('peak at: {:0.3f} idx: {}'.format(na.frequencies[amaxidx], amaxidx))
+    print('filter gain: {:0.3f} db'.format(dbs_max))
     if lowpass:
-        frequencies = na.frequencies[amaxidx:]
-        phases_lo = phases[amaxidx:]
-        idx_stable = amaxidx - fmin_phase_rolloff_idx
-        idx_stable = idx_stable if 0 < idx_stable else amaxidx + 150
-        idx_stable = idx_stable if phases_lo.shape[0] < idx_stable else phases_lo.shape[0] - 2
-        dbs_lo = dbs[amaxidx:]
-        fminpidx, fmaxpidx = characterise_transfer_function(
-            phases_lo, frequencies, phases_lo < phases_lo[idx_stable] + 45)
-        fmindidx, fmaxdidx = characterise_transfer_function(
-            dbs_lo, frequencies, dbs_lo < dbs[fmin_phase_rolloff_idx])
+        if highpass:
+            print('peak at: {:0.0f}'.format(na.frequencies[amaxidx]))
+
+        phases_lp = phases[amaxidx:] if highpass else phases
+        dbs_lp = dbs[amaxidx:] if highpass else dbs
+        frequencies = na.frequencies[amaxidx:] if highpass else na.frequencies
+        fminpidx, fmaxpidx = characterise_transfer_function(phases_lp, frequencies, phases_lp < phases_lp[0] - 45)
+        fmindidx, fmaxdidx = characterise_transfer_function(dbs_lp, frequencies, dbs_lp < dbs_max - 3)
         print('low pass calc from phase then from amplitude: gain: {:0.6e} tf_max: {:0.6f} updated gain_adjust: {:0.6e}\nf between: {:0.0f} and {:0.0f} dbs: {:0.3f} and {:0.3f} phase: {:0.3f} and {:0.3f}'.format(
             iir.gain,
-            tf_abs[fmindidx],
-            gain_adjust * tf_abs[fmindidx],
-            frequencies[fminpidx], frequencies[fmaxpidx],
-            dbs_lo[fminpidx], dbs_lo[fmaxpidx],
-            phases_lo[fminpidx], phases_lo[fmaxpidx]))
+            tf_max,
+            gain_adjust * tf_max,
+            na.frequencies[amaxidx + fminpidx], na.frequencies[amaxidx + fmaxpidx],
+            dbs[amaxidx + fminpidx], dbs[amaxidx + fmaxpidx],
+            phases[amaxidx + fminpidx], phases[amaxidx + fmaxpidx]))
         print('f between: {:0.0f} and {:0.0f} dbs: {:0.3f} and {:0.3f} phase: {:0.3f} and {:0.3f}'.format(
-            frequencies[fmindidx], frequencies[fmaxdidx],
-            dbs_lo[fmindidx], dbs_lo[fmaxdidx],
-            phases_lo[fmindidx], phases_lo[fmaxdidx]))
+            na.frequencies[amaxidx + fmindidx], na.frequencies[amaxidx + fmaxdidx],
+            dbs[amaxidx + fmindidx], dbs[amaxidx + fmaxdidx],
+            phases[amaxidx + fmindidx], phases[amaxidx + fmaxdidx]))
     if highpass:
-        fminpidx, fmaxpidx = characterise_transfer_function(
-            phases, na.frequencies, phases < phases_stable[0] - 45)
-        fmindidx, fmaxdidx = characterise_transfer_function(
-            dbs, na.frequencies, dbs[fmin_phase_rolloff_idx] < dbs)
+        fminpidx, fmaxpidx = characterise_transfer_function(phases, na.frequencies, phases < phases[0] - 45)
+        fmindidx, fmaxdidx = characterise_transfer_function(dbs, na.frequencies, dbs_max - 3 < dbs)
         print('high pass calc from phase then from amplitude gain: {:0.6e} tf_max: {:0.6f} updated gain_adjust: {:0.6e}\nf between: {:0.0f} and {:0.0f} dbs: {:0.3f} and {:0.3f} phase: {:0.3f} and {:0.3f}'.format(
             iir.gain,
-            tf_abs[fmaxdidx],
-            gain_adjust * tf_abs[fmaxdidx],
+            tf_max,
+            gain_adjust * tf_max,
             na.frequencies[fminpidx], na.frequencies[fmaxpidx],
             dbs[fminpidx], dbs[fmaxpidx],
             phases[fminpidx], phases[fmaxpidx]))
@@ -167,14 +186,11 @@ if __name__ == '__main__':
             dbs[fmindidx], dbs[fmaxdidx],
             phases[fmindidx], phases[fmaxdidx]))
 
-    if lowpass and highpass:
-        print('resonance width: {:0.0f}'.format(
-            frequencies[fmaxdidx] - na.frequencies[fmindidx]))
-
     # plot the design data and the measured response
     import matplotlib
     matplotlib.rcParams['figure.figsize'] = (10, 6)
 
     from pyrpl.hardware_modules.iir.iir_theory import bodeplot
     bodeplot([(na.frequencies, designdata, 'designed system'),
-              (na.frequencies, tf, 'measured system')], xlog=True)
+              (na.frequencies, tf, 'measured system')],
+             title = '', pause = False, xlog=True)
