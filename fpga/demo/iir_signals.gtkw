@@ -1,0 +1,49 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Wed Dec 18 13:11:36 2024
+[*]
+[dumpfile] "./demo/waveform.vcd"
+[dumpfile_mtime] "Wed Dec 18 12:00:15 2024"
+[dumpfile_size] 2080522
+[savefile] "./demo/iir_signals.gtkw"
+[timestart] 1556500
+[size] 2235 675
+[pos] -1 -1
+*-14.400000 1065700 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] dv_top.
+[treeopen] dv_top.dut.
+[sst_width] 278
+[signals_width] 295
+[sst_expanded] 1
+[sst_vpaned_height] 184
+@22
+dv_top.dut.red_pitaya_iir_block.set_filter[31:0]
+@28
+dv_top.dut.red_pitaya_iir_block.shortcut
+@29
+dv_top.dut.red_pitaya_iir_block.on
+@22
+dv_top.dut.red_pitaya_iir_block.loops[9:0]
+dv_top.dut.red_pitaya_iir_block.dat_i[13:0]
+dv_top.dut.red_pitaya_iir_block.dat_i_filtered[16:0]
+dv_top.dut.red_pitaya_iir_block.x0[31:0]
+dv_top.dut.red_pitaya_iir_block.x0b[31:0]
+dv_top.dut.red_pitaya_iir_block.p_bx0[31:0]
+dv_top.dut.red_pitaya_iir_block.x1b[31:0]
+dv_top.dut.red_pitaya_iir_block.p_bx1[31:0]
+dv_top.dut.red_pitaya_iir_block.y1a[31:0]
+dv_top.dut.red_pitaya_iir_block.p_ay1[31:0]
+dv_top.dut.red_pitaya_iir_block.y2a[31:0]
+dv_top.dut.red_pitaya_iir_block.p_ay2[31:0]
+dv_top.dut.red_pitaya_iir_block.z0[31:0]
+dv_top.dut.red_pitaya_iir_block.dat_o_sum[35:0]
+dv_top.dut.red_pitaya_iir_block.a1[31:0]
+dv_top.dut.red_pitaya_iir_block.a2[31:0]
+dv_top.dut.red_pitaya_iir_block.b0[31:0]
+dv_top.dut.red_pitaya_iir_block.b1[31:0]
+dv_top.dut.red_pitaya_iir_block.stage0[9:0]
+dv_top.dut.red_pitaya_iir_block.stage4[9:0]
+dv_top.dut.red_pitaya_iir_block.signal_o[13:0]
+dv_top.dut.red_pitaya_iir_block.dat_o[13:0]
+[pattern_trace] 1
+[pattern_trace] 0
