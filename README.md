@@ -4,6 +4,10 @@ PyRPL (Python RedPitaya Lockbox) turns the RedPitaya hardware into a powerful DS
 
 The testbench allows you to create simple projects with sequences of operations on the modules provided by PyRPL.  An example use of the testbench is demonstrated with the measurement of small resistances (mohm/mohm.py).
 
+## Feedback is welcome!
+
+If you are interested in this testbench or my [consolidate_python3 branch](https://github.com/peteasa/pyrpl/tree/consolidate_python3) that I used, have a look at the [Discussions](https://github.com/peteasa/pyrpl_testbench/discussions) or raise an [Issue](https://github.com/peteasa/pyrpl_testbench/issues). If you want to participate in the development of PyRPL, or get the latest official version of PyRPL visit the [official project](https://github.com/pyrpl-fpga/pyrpl) page.
+
 ## PyRPL
 The official PyRPL website address is [http://pyrpl.readthedocs.io/](http://pyrpl.readthedocs.io).  The official PyRPL software is available at [https://github.com/RedPitaya/pyrpl](https://github.com/RedPitaya/pyrpl).  Note: [https://github.com/RedPitaya/pyrpl](https://github.com/RedPitaya/pyrpl) will follow the [https://github.com/pyrpl-fpga/pyrpl](https://github.com/pyrpl-fpga/pyrpl).  So if you want the latest official releases look to those two repositories.  At the time of writing the [https://github.com/pyrpl-fpga/pyrpl](https://github.com/pyrpl-fpga/pyrpl) is more up to date for python3 code.
 
