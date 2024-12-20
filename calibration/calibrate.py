@@ -412,17 +412,49 @@ class TestBench(Meta):
 def start_logging():
     import logging
 
-    logger = logging.getLogger('pyrpl')
-    #logger = logging.getLogger('pyrpl.sshshell')
-    #print('logger handlers: {}'.format(logger.handlers))
-    logger.handlers.clear()
-    fh = logging.FileHandler('pyrpl.log')
-    #fh.setLevel(logging.DEBUG)
-    logger.setLevel(logging.DEBUG)
-    logger.addHandler(fh)
-    #print('logger handlers: {}'.format(logger.handlers))
+    formatter = logging.Formatter('%(levelname)s : %(name)s : %(message)s')
 
-    logger.info('pyrpl version: {}'.format(pyrpl.__version__))
+    # setup optional console logging
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    console.setFormatter(formatter)
+
+    # get the root logger
+    logger = logging.getLogger('')
+
+    logger.handlers.clear()
+    #logger.addHandler(console)
+
+    filename = 'pyrpl.log'
+
+    fh = logging.FileHandler(filename)
+    fh.setFormatter(formatter)
+
+    # send debug logs to filehandler
+    fh.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
+    logger.addHandler(fh)
+
+    msg = 'pyrpl version: {}'.format(pyrpl.__version__)
+    logger.info(msg)
+
+    levels = {'pyrpl.hardware_modules.iir': logging.DEBUG,
+              'pyrpl.hardware_modules.iir.iir': logging.DEBUG,
+              'pyrpl.hardware_modules.iir.iir_theory': logging.DEBUG,
+              'pyrpl.modules': logging.DEBUG,
+              'pyrpl': logging.WARNING,
+              'pyrpl.async_utils': logging.WARNING,
+              'pyrpl.redpitaya': logging.WARNING,
+              'pyrpl.memory': logging.WARNING,
+              'pyrpl.sshshell': logging.WARNING, # set level in __init__.py
+              'pyrpl.widgets.startup_widget': logging.WARNING}
+
+    # switch module logging level
+    for module in levels.keys():
+        logger = logging.getLogger(module)
+        logger.setLevel(levels[module])
+        if levels[module] == logging.INFO:
+            logger.addHandler(console)
 
 def prepare_to_show_plot(p):
     import matplotlib
