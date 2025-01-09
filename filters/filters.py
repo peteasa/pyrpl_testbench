@@ -845,20 +845,20 @@ def generate_f(start, stop, count):
         count,
         endpoint=True)
 
-def z_plane_proper_clear(t):
+def s_plane_proper_clear(t):
     if hasattr(t, 'proper_zeros'):
         t.pop('proper_zeros')
         t.pop('proper_poles')
         t.pop('proper_gain')
 
-def z_plane_proper_init(t):
+def s_plane_proper_init(t):
     if hasattr(t, 'iirf_gain') and not hasattr(t, 'proper_zeros'):
         (zeros, poles, gain) = t.iirf.iirfilter.proper_sys
         t.set('proper_zeros', np.asarray(zeros, dtype=np.complex128) / t.fc)
         t.set('proper_poles', np.asarray(poles, dtype=np.complex128) / t.fc)
         t.set('proper_gain', gain)
 
-def plot_z_plane_proper(t):
+def plot_s_plane_proper(t):
     if hasattr(t, 'proper_zeros'):
         plot_zp(t, t.proper_zeros, t.proper_poles,
                 'proper ze: {} po: {}'.format(
@@ -1461,7 +1461,7 @@ if __name__ == '__main__':
     iirf_init(t)
     network_analyser_init(t)
     t.set('tf_items', ['desgn', 'meas', 'pz'])
-    t.set('plot_items', ['z_plane_proper', 'z_plane_pz', 'tf_dbs', 'tf_phases']) # s_plane_pz
+    t.set('plot_items', ['s_plane_proper', 'z_plane_pz', 'tf_dbs', 'tf_phases']) # s_plane_pz
     t.set('plot_sizes', {'s_plane': {'ncols': 1}, 'z_plane': {'ncols': 1}, 'tf': {'nrows': 1}})
 
     t.set('svg', True)
