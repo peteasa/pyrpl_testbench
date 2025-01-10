@@ -9,6 +9,7 @@ from matplotlib import patches
 import numpy as np
 import pyrpl
 from pyrpl.async_utils import sleep
+import scipy.signal as sig
 import string
 
 DEBUG = False
@@ -817,6 +818,35 @@ def log_zp(t, zeros, poles, title = ''):
     msg = 'poles: {}'.format([po for po in poles])
     logfn(msg)
 
+def log_basics(t):
+    samples = round(125e6 / (t.loops * t.fc))
+
+    log_msg(t, 'fc: {:0.0f} loops: {} samples: {}'.format(t.fc, t.loops, samples))
+
+    # get the calculated s-plane poles zeros and gain
+    log_gain_adjust(t, t.gain, t.gain_adjust, 'gain and gain adjust')
+    log_zp(t, t.zeros, t.poles, 's-plane zeros and poles')
+
+def log_extended(t):
+    if not hasattr(t, 'proper_gain'):
+        s_plane_proper_init(t)
+
+    log_msg(t, 'adjusted gain: {}'.format(t.proper_gain))
+    log_zp(t, t.proper_zeros, t.proper_poles, 'proper zeros and poles')
+
+    log_msg(t, 'rescaled_sys k: {}'.format(t.k))
+    log_zp(t, t.zd, t.pd, 'z-plane zeros and poles')
+
+    if not hasattr(t, 'rd'):
+        partial_init(t)
+
+    log_msg(t, 'rd: {} pd: {} cd: {}'.format(t.rd, t.pd, t.cd), 'partial fraction expansion')
+    log_msg(t, '{}'.format(t.iirf.coefficients), 'Coefficients (6 per biquad)')
+    if hasattr(t, 'coef_prop'):
+        log_msg(t, '{}'.format(t.coef_prop), 'Proposed Coefficients (6 per biquad)')
+    if hasattr(t, 'coef_leg'):
+        log_msg(t, '{}'.format(t.coef_leg), 'Existing Coefficients (6 per biquad)')
+
 def omegac_sin(omegac, angle, delta = 0):
     val = np.sin((angle+delta) * np.pi / 180)
     if abs(omegac * val) < 1.0:
@@ -872,8 +902,6 @@ def z_plane_pz_clear(t):
 
 def z_plane_pz_init(t):
     if hasattr(t, 'iirf_gain') and not hasattr(t, 'zd'):
-        t.set('loops', t.iirf.iirfilter.loops)
-        t.set('dt', t.iirf.iirfilter.dt)
         z, p, k = t.iirf.iirfilter.rescaled_sys
         zd = np.exp(np.asarray(z, dtype=np.complex128) * t.dt * t.loops)
         pd = np.exp(np.asarray(p, dtype=np.complex128) * t.dt * t.loops)
@@ -881,6 +909,9 @@ def z_plane_pz_init(t):
             zd = np.append(zd, complex(-1, 0))
 
         t.set('zd', zd)
+        if hasattr(t, 'pd') and not np.array_equal(t.pd, pd):
+            logmsg(t, 'WARNING z_plane_pz_init pd: {} old pd: {}'.format(pd, t.pd))
+
         t.set('pd', pd)
         t.set('k', k)
 
@@ -898,8 +929,266 @@ def partial_init(t):
     if hasattr(t, 'iirf_gain') and not hasattr(t, 'rd'):
         rd, pd, cd = t.iirf.iirfilter.rp_discrete
         t.set('rd', rd)
-        t.set('pd', pd)
         t.set('cd', cd)
+        if hasattr(t, 'pd') and not np.array_equal(t.pd, pd):
+            logmsg(t, 'WARNING partial_init pd: {} old pd: {}'.format(pd, t.pd))
+
+        t.set('pd', pd)
+
+def tf_partial_generation(t):
+    if not hasattr(t, 'rd'):
+        partial_init(t)
+
+    t.set('tf_partial', np.empty(t.frequencies.shape, dtype=np.complex128))
+    for fidx, fz in enumerate(t.frequencies):
+        angle = np.pi * fz * t.dt * t.loops
+        zc = complex( np.cos(angle),
+                      np.sin(angle) )
+
+        t.tf_partial[fidx] = t.cd
+        for idx, rd in enumerate(t.rd):
+            t.tf_partial[fidx] += rd / (zc - t.pd[idx])
+
+def tf_partial_clear(t):
+    if hasattr(t, 'tf_partial'):
+        partial_clear(t)
+        t.pop('tf_partial')
+        t.pop('plot_partial_dbs')
+        t.pop('plot_partial_phases')
+
+def tf_partial_init(t):
+    if not hasattr(t, 'tf_partial'):
+        # generate the transfer function from the partial fractions
+        tf_partial_generation(t)
+
+    tf_abs = np.abs(t.tf_partial)
+    t.set('plot_partial_dbs', 20 * np.log10(tf_abs))
+    t.set('plot_partial_phases', np.angle(t.tf_partial, deg = True))
+
+def rp2coefficients(t):
+    ## copied from iir_theory with minor changes
+    coef = 'coef_{}'.format(t.coef_type)
+    if hasattr(t, 'rd') and not hasattr(t, coef):
+        t.getcreate('tol', default = 1e-3)
+        N = int(np.ceil(float(len(t.pd)) / 2.0))
+        if t.cd != 0:
+            N += 1
+        if N == 0:
+            t.logmsg(t,
+                'Warning: No poles or zeros defined. Filter will be turned off!')
+            coeff = t.set(coef, np.zeros((1, 6), dtype=np.float64))
+            coeff[0, 0] = 0
+            coeff[:, 3] = 1.0
+            return t.get(coef)
+
+        coeff = t.set(coef, np.zeros((N, 6), dtype=np.float64))
+        coeff[0, 0] = 0
+        coeff[:, 3] = 1.0
+
+        rc = list(t.rd)
+        pc = list(t.pd)
+        complexp = []
+        complexr = []
+        realp = []
+        realr = []
+        while (len(pc) > 0):
+            pp = pc.pop(0)
+            rr = rc.pop(0)
+            if np.imag(pp) == 0:
+                realp.append(pp)
+                realr.append(rr)
+            else:
+                # find closest-matching index
+                diff = np.abs(np.asarray(pc) - np.conjugate(pp))
+                index = np.argmin(diff)
+                if diff[index] > t.tol:
+                    t.logmsg(
+                        t,
+                        'Conjugate partner for pole {} deviates from expected value by {} > {}'.format(
+                            pp, diff[index], t.tol))
+                complexp.append((pp + np.conjugate(pc.pop(index))) / 2.0)
+                complexr.append((rr + np.conjugate(rc.pop(index))) / 2.0)
+
+        complexp = np.asarray(complexp, dtype=np.complex128)
+        complexr = np.asarray(complexr, dtype=np.complex128)
+        invert = -1.0
+        # THIS IS THE CHANGE: introduce b2 - [b0, b1, b2, 1.0, a1, a2]
+        coeff[:len(complexp), t.coef_idx] = 2.0 * np.real(complexr)
+        coeff[:len(complexp), t.coef_idx + 1] = -2.0 * np.real(complexr * np.conjugate(complexp))
+        coeff[:len(complexp), 4] = 2.0 * np.real(complexp) * invert
+        coeff[:len(complexp), 5] = -1.0 * np.abs(complexp) ** 2 * invert
+        if len(realp) % 2 != 0:
+            realp.append(0)
+            realr.append(0)
+
+        realp = np.asarray(np.real(realp), dtype=np.float64)
+        realr = np.asarray(np.real(realr), dtype=np.float64)
+        for i in range(len(realp) // 2):
+            p1, p2 = realp[2 * i], realp[2 * i + 1]
+            r1, r2 = realr[2 * i], realr[2 * i + 1]
+            coeff[len(complexp)+i, t.coef_idx] = r1 + r2
+            coeff[len(complexp)+i, t.coef_idx + 1] = -r1 * p2 - r2 * p1
+            coeff[len(complexp)+i, 4] = (p1 + p2) * invert
+            coeff[len(complexp)+i, 5] = (-p1 * p2) * invert
+
+        # finish the design by adding a constant term if needed
+        if t.cd != 0:
+            coeff[-1, 0] = t.cd
+
+        return t.get(coef)
+
+def sos2zpk(sos):
+    ## copied from iir_theory
+    sos = np.asarray(sos)
+    n_sections = sos.shape[0]
+    z = np.empty(n_sections*2, np.complex128)
+    p = np.empty(n_sections*2, np.complex128)
+    k = 1.
+    for section in range(n_sections):
+        b, a = sos[section, :3], sos[section, 3:]
+        # remove leading zeros from numerator to avoid badcoefficient warning in scipy.signal.normaize
+        while b[0] == 0:
+            b = b[1:]
+        # convert to transfer function
+        zpk = sig.tf2zpk(b, a)
+        z[2*section:2*(section+1)] = zpk[0]
+        p[2*section:2*(section+1)] = zpk[1]
+        k *= zpk[2]
+
+    return z, p, k
+
+def minimize_delay(t):
+    ## copied from iir_theory
+    coef = 'coef_{}'.format(t.coef_type)
+    if hasattr(t, coef):
+        ranks = list()
+        for c in list(t.get(coef)):
+            # empty sections (numerator is 0) are ranked 0
+            if (c[0:3] == 0).all():
+                ranks.append(0)
+            else:
+                z, p, k = sos2zpk([c])
+                # compute something proportional to the frequency of the pole
+                ppp = [np.abs(np.log(pp)) for pp in p if pp != 0]
+                if not ppp:
+                    f = 1e20  # no pole -> superfast
+                else:
+                    f = np.max(ppp)
+                ranks.append(f)
+
+        newcoefficients = [c for (rank, c) in
+                           sorted(zip(ranks, list(t.get(coef))),
+                                  key=lambda pair: -pair[0])]
+
+        t.set(coef, np.array(newcoefficients))
+
+        return t.get(coef)
+
+def finiteprecision(t):
+    ## copied from iir_theory
+    coef = 'coef_{}'.format(t.coef_type)
+    shifted_coef = 'shifted_coef_{}'.format(t.coef_type)
+    if hasattr(t, coef) and not hasattr(t, shifted_coef):
+        t.getcreate('iirbits', default = 32)
+        t.getcreate('iirshift', default = 29)
+        shifted_coeff = t.set(shifted_coef, np.zeros(t.get(coef).shape, dtype=np.float64))
+        for x in np.nditer(shifted_coeff, op_flags=['readwrite']):
+            xr = np.round(x * 2 ** t.iirshift)
+            xmax = 2 ** (t.iirbits - 1)
+            if xr == 0 and xr != 0:
+                logger.warning("One value was rounded off to zero: Increase "
+                               "shiftbits in fpga design if this is a "
+                               "problem!")
+            elif xr > xmax - 1:
+                xr = xmax - 1
+                logger.warning("One value saturates positively: Increase "
+                               "totalbits or decrease gain!")
+            elif xr < -xmax:
+                xr = -xmax
+                logger.warning("One value saturates negatively: Increase "
+                               "totalbits or decrease gain!")
+            x[...] = 2 ** (-t.iirshift) * xr
+
+        return t.get(shifted_coef)
+
+def extend_to_loops(t):
+    coef = 'coef_{}'.format(t.coef_type)
+    if hasattr(t, coef) and t.get(coef).shape[0] < t.loops:
+        for i in range(t.loops - t.get(coef).shape[0]):
+            bq = np.array([[0.0, 0.0, 0.0, 1.0, 0.0, 0.0]], dtype = float)
+            t.set(coef, np.concatenate((t.get(coef), bq)))
+
+def generate_coefficients(t):
+    partial_init(t)
+    rp2coefficients(t)
+    minimize_delay(t)
+    extend_to_loops(t)
+
+def tf_coef_generation(t):
+    coef = 'coef_{}'.format(t.coef_type)
+    if not hasattr(t, coef):
+        generate_coefficients(t)
+
+    tf_coef = t.set('tf_coef_{}'.format(t.coef_type), np.empty(t.frequencies.shape, dtype=np.complex128))
+    invert = -1.0
+    for fidx, fz in enumerate(t.frequencies):
+        angle = np.pi * fz * t.dt * t.loops
+        zc = complex( np.cos(angle),
+                      np.sin(angle) )
+
+        tf_coef[fidx] = 0.0
+        for biquad in t.get(coef):
+            bq = zc * zc * biquad[0] + zc * biquad[1] + biquad[2]
+            bq /= zc * zc * biquad[3] - invert * zc * biquad[4] - invert * biquad[5]
+            tf_coef[fidx] += bq
+
+def tf_coef_prop_generation(t):
+    t.set('coef_idx', 1)
+    t.set('coef_type', 'prop')
+    tf_coef_generation(t)
+
+def tf_coef_leg_generation(t):
+    t.set('coef_idx', 0)
+    t.set('coef_type', 'leg')
+    tf_coef_generation(t)
+
+def tf_coef_clear(t):
+    if hasattr(t, 'coef_{}'.format(t.coef_type)):
+        t.pop('coef_{}'.format(t.coef_type))
+        t.pop('shifted_coef_{}'.format(t.coef_type))
+        t.pop('tf_coef_{}'.format(t.coef_type))
+        t.pop('plot_coef_{}_dbs'.format(t.coef_type))
+        t.pop('plot_coef_{}_phases'.format(t.coef_type))
+
+def tf_coef_init(t):
+    if not hasattr(t, 'tf_coef_{}'.format(t.coef_type)):
+        # generate the transfer function from the z-plane poles and zeros
+        tf_coef_generation(t)
+
+    tf_abs = np.abs(t.get('tf_coef_{}'.format(t.coef_type)))
+    t.set('plot_coef_{}_dbs'.format(t.coef_type), 20 * np.log10(tf_abs))
+    t.set('plot_coef_{}_phases'.format(t.coef_type),
+          np.angle(t.get('tf_coef_{}'.format(t.coef_type)), deg = True))
+
+def tf_coef_prop_clear(t):
+    t.set('coef_idx', 1)
+    t.set('coef_type', 'prop')
+    tf_coef_clear(t)
+
+def tf_coef_prop_init(t):
+    t.set('coef_idx', 1)
+    t.set('coef_type', 'prop')
+    tf_coef_init(t)
+
+def tf_coef_leg_clear(t):
+    t.set('coef_idx', 0)
+    t.set('coef_type', 'leg')
+    tf_coef_clear(t)
+
+def tf_coef_leg_init(t):
+    t.set('coef_idx', 0)
+    t.set('coef_type', 'leg')
+    tf_coef_init(t)
 
 def tf_pz_generation(t):
     t.set('tf_pz', np.empty(t.frequencies.shape, dtype=np.complex128))
@@ -909,7 +1198,6 @@ def tf_pz_generation(t):
                       np.sin(angle) )
 
         t.tf_pz[fidx] = t.k
-        phase = 0
         for idx, po in enumerate(t.pd):
             if idx < t.zd.shape[0]:
                 t.tf_pz[fidx] *= zc - t.zd[idx]
@@ -917,7 +1205,8 @@ def tf_pz_generation(t):
             t.tf_pz[fidx] /= zc - po
 
 def tf_pz_clear(t):
-    if hasattr(t, 'plot_pz_dbs'):
+    if hasattr(t, 'tf_pz'):
+        t.pop('tf_pz')
         t.pop('plot_pz_dbs')
         t.pop('plot_pz_phases')
 
@@ -931,12 +1220,13 @@ def tf_pz_init(t):
     t.set('plot_pz_phases', np.angle(t.tf_pz, deg = True))
 
 def tf_desgn_clear(t):
-    if hasattr(t, 'plot_desgn_dbs'):
+    if hasattr(t, 'designdata'):
+        t.pop('designdata')
         t.pop('plot_desgn_dbs')
         t.pop('plot_desgn_phases')
 
 def tf_desgn_init(t):
-    t.designdata = t.iirf.transfer_function(t.frequencies)
+    t.set('designdata', t.iirf.transfer_function(t.frequencies))
     tf_abs = np.abs(t.designdata)
     t.set('plot_desgn_dbs', 20 * np.log10(tf_abs))
     t.set('plot_desgn_phases', np.angle(t.designdata, deg = True))
@@ -983,9 +1273,9 @@ def tf_dbs_init(t):
 def plot_tf_dbs(t):
     labels = []
     to_plot = []
-    for idx, item in enumerate(t.tf_items):
+    for item in t.tf_items:
         plot_data = 'plot_{}_dbs'.format(item)
-        to_plot.append(getattr(t, plot_data))
+        to_plot.append(t.get(plot_data))
 
         labels.append(item)
 
@@ -1008,7 +1298,7 @@ def tf_phases_init(t):
 def plot_tf_phases(t):
     labels = []
     to_plot = []
-    for idx, item in enumerate(t.tf_items):
+    for item in t.tf_items:
         plot_data = 'plot_{}_phases'.format(item)
         to_plot.append(getattr(t, plot_data))
 
@@ -1087,15 +1377,15 @@ def configure_gain(t):
                              gain_adjust_twin)
 
     if ttype == 'butter_lp':
-        tests = [{'gain_adjust': 9.99e5, 'samples': samples}]
+        tests = [{'gain_adjust': 2.6e23, 'samples': samples}]
         t.set('gain_adjust', tests[test_idx]['gain_adjust'])
 
     if ttype == 'notch':
-        tests = [{'gain_adjust': 9.99e5, 'samples': samples}]
+        tests = [{'gain_adjust': 1.0, 'samples': samples}]
         t.set('gain_adjust', tests[test_idx]['gain_adjust'])
 
     if ttype == 'resonance':
-        tests = [{'gain_adjust': 9.99e5, 'samples': samples}]
+        tests = [{'gain_adjust': 7.0e22, 'samples': samples}]
         t.set('gain_adjust', tests[test_idx]['gain_adjust'])
 
 def get_create_gain_adjust(t):
@@ -1238,6 +1528,9 @@ def iirf_setup(t):
                      loops=t.test.loops,
                      output_direct = 'off')
 
+    t.set('loops', t.iirf.iirfilter.loops)
+    t.set('dt', t.iirf.iirfilter.dt)
+
 def gain_adjust_correction(t, gain_adjust, tf_max):
     return gain_adjust * tf_max / t.gain
 
@@ -1379,8 +1672,6 @@ def test_sequence(t):
     for t.iter_count in range(t.test_vectors.shape[0]):
         # clear old results
         if hasattr(t, 'iirf_gain'): t.pop('iirf_gain')
-        if hasattr(t, 'tf_pz'): t.pop('tf_pz')
-        if hasattr(t, 'designdata'): t.pop('designdata')
         tf_characterisation_clear(t)
         for item in t.plot_items:
             t.run(['{}_clear'.format(item)])
@@ -1413,15 +1704,7 @@ def test_sequence(t):
             log_msg(t, 'factor: {} updated gain_adjust: {:0.6e}'.format(factor, t.gain_adjust))
             iirf_setup(t)
 
-        # get the calculated s-plane poles zeros and gain
-        log_gain_adjust(t, t.gain, t.gain_adjust, 'gain and gain adjust')
-        log_zp(t, t.zeros, t.poles, 's-plane zeros and poles')
-
-        if not hasattr(t, 'proper_gain'):
-            z_plane_proper_init(t)
-
-        log_msg(t, 'adjusted gain: {}'.format(t.proper_gain))
-        log_zp(t, t.proper_zeros, t.proper_poles, 'proper zeros and poles')
+        log_basics(t)
 
         run_test(t)
 
@@ -1443,14 +1726,7 @@ def test_sequence(t):
 
         if hasattr(t.test, 'plot') and t.test.plot and hasattr(t, 'iter_count') and t.iter_count % 5 == 0:
             plot_results(t)
-
-            samples = round(125e6 / (t.loops * t.fc))
-            log_msg(t, 'fc: {:0.0f} loops: {} samples: {}'.format(t.fc, t.loops, samples))
-            log_msg(t, 'rescaled_sys k: {}'.format(t.k))
-            log_zp(t, t.zd, t.pd, 'z-plane zeros and poles')
-            partial_init(t)
-            log_msg(t, 'rd: {} pd: {} cd: {}'.format(t.rd, t.pd, t.cd), 'partial fraction expansion')
-            log_msg(t, '{}'.format(t.iirf.coefficients), 'Coefficients (6 per biquad)')
+            log_extended(t)
 
 if __name__ == '__main__':
     RPCONFIG = 'filters.filters'
@@ -1460,14 +1736,16 @@ if __name__ == '__main__':
 
     iirf_init(t)
     network_analyser_init(t)
-    t.set('tf_items', ['desgn', 'meas', 'pz'])
+    #t.set('tf_items', ['desgn', 'meas', 'pz'])
+    #t.set('tf_items', ['desgn', 'meas', 'partial'])
+    t.set('tf_items', ['desgn', 'meas', 'coef_prop', 'coef_leg'])
     t.set('plot_items', ['s_plane_proper', 'z_plane_pz', 'tf_dbs', 'tf_phases']) # s_plane_pz
     t.set('plot_sizes', {'s_plane': {'ncols': 1}, 'z_plane': {'ncols': 1}, 'tf': {'nrows': 1}})
 
     t.set('svg', True)
 
     # run single item
-    # t.run(['configure_gain', 'generate_poles_zeros', 'iirf_setup', 'run_test', 'plot_results'])
+    # t.run(['configure_gain', 'generate_poles_zeros', 'iirf_setup', 'log_basics', 'run_test', 'tf_characterisation_init', 'plot_results', 'log_extended'])
     # run sequence
     t.run(['get_create_gain_adjust', 'test_sequence'])
 
