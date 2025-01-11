@@ -844,8 +844,12 @@ def log_extended(t):
     log_msg(t, '{}'.format(t.iirf.coefficients), 'Coefficients (6 per biquad)')
     if hasattr(t, 'coef_prop'):
         log_msg(t, '{}'.format(t.coef_prop), 'Proposed Coefficients (6 per biquad)')
+    if hasattr(t, 'fpga_coef_prop'):
+        log_msg(t, '{}'.format(t.fpga_coef_prop), 'Proposed FPGA Coefficients (6 per biquad)')
     if hasattr(t, 'coef_leg'):
         log_msg(t, '{}'.format(t.coef_leg), 'Existing Coefficients (6 per biquad)')
+    if hasattr(t, 'fpga_coef_leg'):
+        log_msg(t, '{}'.format(t.fpga_coef_leg), 'Existing FPGA Coefficients (6 per biquad)')
 
 def omegac_sin(omegac, angle, delta = 0):
     val = np.sin((angle+delta) * np.pi / 180)
@@ -1085,31 +1089,46 @@ def minimize_delay(t):
         return t.get(coef)
 
 def finiteprecision(t):
-    ## copied from iir_theory
+    ## copied from iir_theory finiteprecision
     coef = 'coef_{}'.format(t.coef_type)
-    shifted_coef = 'shifted_coef_{}'.format(t.coef_type)
-    if hasattr(t, coef) and not hasattr(t, shifted_coef):
+    rounded_coef = 'rounded_coef_{}'.format(t.coef_type)
+    if hasattr(t, coef) and not hasattr(t, rounded_coef):
         t.getcreate('iirbits', default = 32)
         t.getcreate('iirshift', default = 29)
-        shifted_coeff = t.set(shifted_coef, np.zeros(t.get(coef).shape, dtype=np.float64))
-        for x in np.nditer(shifted_coeff, op_flags=['readwrite']):
+        rounded_coeff = t.set(rounded_coef, np.zeros(t.get(coef).shape, dtype=np.float64))
+        rounded_coeff += t.get(coef)
+        for x in np.nditer(rounded_coeff, op_flags=['readwrite']):
             xr = np.round(x * 2 ** t.iirshift)
             xmax = 2 ** (t.iirbits - 1)
             if xr == 0 and xr != 0:
-                logger.warning("One value was rounded off to zero: Increase "
-                               "shiftbits in fpga design if this is a "
-                               "problem!")
+                t.logmsg(t, 'WARNING: One value was rounded off to zero: Increase shiftbits in fpga design if this is a problem!')
             elif xr > xmax - 1:
                 xr = xmax - 1
-                logger.warning("One value saturates positively: Increase "
-                               "totalbits or decrease gain!")
+                t.logmsg(t, 'WARNING: One value saturates positively: Increase totalbits or decrease gain!')
             elif xr < -xmax:
                 xr = -xmax
-                logger.warning("One value saturates negatively: Increase "
-                               "totalbits or decrease gain!")
+                t.logmsg(t, 'WARNING: One value saturates negatively: Increase totalbits or decrease gain!')
+
             x[...] = 2 ** (-t.iirshift) * xr
 
-        return t.get(shifted_coef)
+    return t.get(rounded_coef)
+
+def generate_fpga_coefficients(t):
+    ## adapted from iir coefficients
+    coef = 'coef_{}'.format(t.coef_type)
+    fpga_coef = 'fpga_coef_{}'.format(t.coef_type)
+    invert = -1
+    if hasattr(t, coef) and not hasattr(t, fpga_coef):
+        t.getcreate('iirbits', default = 32)
+        t.getcreate('iirshift', default = 29)
+        coeff = finiteprecision(t)
+        f = coeff * 2 ** t.iirshift
+        fpga_coeff = t.set(fpga_coef, f.astype(int))
+        for i in range(fpga_coeff.shape[0]):
+            for j in range(4, fpga_coeff.shape[1], 1):
+                fpga_coeff[i, j] *= invert
+
+        return t.get(fpga_coef)
 
 def extend_to_loops(t):
     coef = 'coef_{}'.format(t.coef_type)
@@ -1119,15 +1138,41 @@ def extend_to_loops(t):
             t.set(coef, np.concatenate((t.get(coef), bq)))
 
 def generate_coefficients(t):
-    partial_init(t)
-    rp2coefficients(t)
-    minimize_delay(t)
-    extend_to_loops(t)
-
-def tf_coef_generation(t):
     coef = 'coef_{}'.format(t.coef_type)
     if not hasattr(t, coef):
-        generate_coefficients(t)
+        partial_init(t)
+        rp2coefficients(t)
+        minimize_delay(t)
+        extend_to_loops(t)
+
+def fpga_coef_prop_clear(t):
+    tf_coef_prop_clear(t)
+
+def fpga_coef_prop_init(t):
+    t.set('coef_idx', 1)
+    t.set('coef_type', 'prop')
+    generate_coefficients(t)
+    generate_fpga_coefficients(t)
+
+def fpga_coef_leg_clear(t):
+    tf_coef_leg_clear(t)
+
+def fpga_coef_leg_init(t):
+    t.set('coef_idx', 0)
+    t.set('coef_type', 'leg')
+    generate_coefficients(t)
+    generate_fpga_coefficients(t)
+
+def fpga_coef_clear(t):
+    fpga_coef_prop_clear(t)
+    fpga_coef_leg_clear(t)
+
+def fpga_coef_init(t):
+    fpga_coef_prop_init(t)
+    fpga_coef_leg_init(t)
+
+def tf_coef_generation(t):
+    generate_coefficients(t)
 
     tf_coef = t.set('tf_coef_{}'.format(t.coef_type), np.empty(t.frequencies.shape, dtype=np.complex128))
     invert = -1.0
@@ -1137,7 +1182,7 @@ def tf_coef_generation(t):
                       np.sin(angle) )
 
         tf_coef[fidx] = 0.0
-        for biquad in t.get(coef):
+        for biquad in t.get('coef_{}'.format(t.coef_type)):
             bq = zc * zc * biquad[0] + zc * biquad[1] + biquad[2]
             bq /= zc * zc * biquad[3] - invert * zc * biquad[4] - invert * biquad[5]
             tf_coef[fidx] += bq
@@ -1155,15 +1200,15 @@ def tf_coef_leg_generation(t):
 def tf_coef_clear(t):
     if hasattr(t, 'coef_{}'.format(t.coef_type)):
         t.pop('coef_{}'.format(t.coef_type))
-        t.pop('shifted_coef_{}'.format(t.coef_type))
+        t.pop('rounded_coef_{}'.format(t.coef_type))
+        t.pop('fpga_coef_{}'.format(t.coef_type))
         t.pop('tf_coef_{}'.format(t.coef_type))
         t.pop('plot_coef_{}_dbs'.format(t.coef_type))
         t.pop('plot_coef_{}_phases'.format(t.coef_type))
 
 def tf_coef_init(t):
-    if not hasattr(t, 'tf_coef_{}'.format(t.coef_type)):
-        # generate the transfer function from the z-plane poles and zeros
-        tf_coef_generation(t)
+    # generate the transfer function from the z-plane poles and zeros
+    tf_coef_generation(t)
 
     tf_abs = np.abs(t.get('tf_coef_{}'.format(t.coef_type)))
     t.set('plot_coef_{}_dbs'.format(t.coef_type), 20 * np.log10(tf_abs))
@@ -1737,6 +1782,8 @@ if __name__ == '__main__':
     t.set('plot_sizes', {'s_plane': {'ncols': 1}, 'z_plane': {'ncols': 1}, 'tf': {'nrows': 1}})
 
     t.set('svg', True)
+
+    # 'fpga_coef_init' generates the values saved to the fpga
 
     # run single item
     # t.run(['configure_gain', 'generate_poles_zeros', 'iirf_setup', 'log_basics', 'run_test', 'tf_characterisation_init', 'plot_results', 'log_extended'])
