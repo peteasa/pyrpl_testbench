@@ -461,11 +461,11 @@ class TestBench(Meta):
             globals()[func](self)
 
 class MeasureTransferFunction(Meta):
-    def __init__(self, t):
+    def __init__(self, t, tf):
         if hasattr(t, 'logger'):
             self.set('logger', t.logger)
 
-        self.set('tf', t.tf)
+        self.set('tf', tf)
         self.set('frequencies', t.frequencies)
 
         ttype = gen_test_type(t.test)
@@ -1245,7 +1245,7 @@ def tf_meas_clear(t):
 
 def tf_meas_init(t):
     if not hasattr(t, 'tf_measurement'):
-        t.set('tf_measurement', MeasureTransferFunction(t))
+        t.set('tf_measurement', MeasureTransferFunction(t, t.tf))
 
     t.set('plot_meas_phases', t.tf_measurement.phases)
     t.set('plot_meas_dbs', t.tf_measurement.dbs)
@@ -1255,7 +1255,7 @@ def tf_characterisation_clear(t):
 
 def tf_characterisation_init(t):
     if not hasattr(t, 'tf_measurement'):
-        t.set('tf_measurement', MeasureTransferFunction(t))
+        t.set('tf_measurement', MeasureTransferFunction(t, t.tf))
 
     t.tf_measurement.peak_gain()
 
@@ -1708,18 +1708,12 @@ def test_sequence(t):
 
         run_test(t)
 
-        # make measurements from the generated transfer function
-        if not hasattr(t, 'tf_measurement'):
-            t.set('tf_measurement', MeasureTransferFunction(t))
-
-        # log characterisation of tf
+        # measure the transfer function
         tf_characterisation_init(t)
 
         if hasattr(t, 'iter_count'):
             # save calibration result - t.fc_idx, t.gain_adjust_idx
             t.getcreate('results', np.empty((0, 2), dtype = float))
-            if not hasattr(t, 'tf_measurement'):
-                t.set('tf_measurement', MeasureTransferFunction(t))
 
             result = np.array([[t.fc, t.tf_measurement.gain_adjust_correction]], dtype = float)
             t.results = np.concatenate((t.results, result))
