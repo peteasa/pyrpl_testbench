@@ -930,7 +930,8 @@ def z_plane_pz_init(t):
 
         t.set('zd', zd)
         if hasattr(t, 'pd') and not np.array_equal(t.pd, pd):
-            logmsg(t, 'WARNING z_plane_pz_init pd: {} old pd: {}'.format(pd, t.pd))
+            logmsg(t, 'z_plane_pz_init pd: {} old pd: {}'.format(pd, t.pd),
+                   loglevel = logging.WARNING)
 
         t.set('pd', pd)
         t.set('k', k)
@@ -951,7 +952,8 @@ def partial_init(t):
         t.set('rd', rd)
         t.set('cd', cd)
         if hasattr(t, 'pd') and not np.array_equal(t.pd, pd):
-            logmsg(t, 'WARNING partial_init pd: {} old pd: {}'.format(pd, t.pd))
+            logmsg(t, 'partial_init pd: {} old pd: {}'.format(pd, t.pd),
+                   loglevel = logging.WARNING)
 
         t.set('pd', pd)
 
@@ -994,8 +996,9 @@ def rp2coefficients(t):
         if t.cd != 0:
             N += 1
         if N == 0:
-            t.logmsg(t,
-                'Warning: No poles or zeros defined. Filter will be turned off!')
+            logmsg(t,
+                   'No poles or zeros defined. Filter will be turned off!',
+                   loglevel = logging.WARNING)
             coeff = t.set(coef_raw, np.zeros((1, 6), dtype=np.float64))
             coeff[0, 0] = 0
             coeff[:, 3] = 1.0
@@ -1022,10 +1025,9 @@ def rp2coefficients(t):
                 diff = np.abs(np.asarray(pc) - np.conjugate(pp))
                 index = np.argmin(diff)
                 if diff[index] > t.tol:
-                    t.logmsg(
-                        t,
-                        'Conjugate partner for pole {} deviates from expected value by {} > {}'.format(
-                            pp, diff[index], t.tol))
+                    logmsg(t,
+                           'Conjugate partner for pole {} deviates from expected value by {} > {}'.format(
+                               pp, diff[index], t.tol))
                 complexp.append((pp + np.conjugate(pc.pop(index))) / 2.0)
                 complexr.append((rr + np.conjugate(rc.pop(index))) / 2.0)
 
@@ -1117,17 +1119,17 @@ def finiteprecision(t):
             xr = np.round(x * 2 ** t.iirshift)
             xmax = 2 ** (t.iirbits - 1)
             if xr == 0 and xr != 0:
-                t.logmsg(t,
-                         'One value was rounded off to zero: Increase shiftbits in fpga design if this is a problem!',
-                         loglevel = logging.WARNING)
+                logmsg(t,
+                       'One value was rounded off to zero: Increase shiftbits in fpga design if this is a problem!',
+                       loglevel = logging.WARNING)
             elif xr > xmax - 1:
                 xr = xmax - 1
-                t.logmsg(t, 'One value saturates positively: Increase totalbits or decrease gain!',
-                         loglevel = logging.WARNING)
+                logmsg(t, 'One value saturates positively: Increase totalbits or decrease gain!',
+                       loglevel = logging.WARNING)
             elif xr < -xmax:
                 xr = -xmax
-                t.logmsg(t, 'One value saturates negatively: Increase totalbits or decrease gain!',
-                         loglevel = logging.WARNING)
+                logmsg(t, 'One value saturates negatively: Increase totalbits or decrease gain!',
+                       loglevel = logging.WARNING)
 
             x[...] = 2 ** (-t.iirshift) * xr
 
@@ -1178,7 +1180,7 @@ def fpga_coef_comp_clear(t):
 def fpga_coef_comp_init(t):
     t.set('coef_idx', 0)
     t.set('coef_type', 'comp')
-    t.set('coef_format', 'trad')
+    t.set('coef_format', 'comp')
     generate_coefficients(t)
     generate_fpga_coefficients(t)
 
@@ -1222,15 +1224,19 @@ def tf_coef_comp_raw_generation(t):
 
 def tf_coef_clear(t):
     if hasattr(t, 'coef_{}_raw'.format(t.coef_type)):
+        partial_clear(t)
         t.pop('coef_{}_raw'.format(t.coef_type))
         t.pop('coef_{}'.format(t.coef_type))
         t.pop('fpga_coef_{}'.format(t.coef_type))
         t.pop('tf_coef_{}_raw'.format(t.coef_type))
         t.pop('tf_coef_{}'.format(t.coef_type))
+        # t.pop('tf_final_{}'.format(t.coef_type))
         t.pop('plot_coef_{}_raw_dbs'.format(t.coef_type))
         t.pop('plot_coef_{}_raw_phases'.format(t.coef_type))
         t.pop('plot_coef_{}_dbs'.format(t.coef_type))
         t.pop('plot_coef_{}_phases'.format(t.coef_type))
+        t.pop('plot_final_{}_dbs'.format(t.coef_type))
+        t.pop('plot_final_{}_phases'.format(t.coef_type))
 
 def tf_coef_init(t):
     # generate the transfer function from the z-plane poles and zeros
@@ -1285,6 +1291,43 @@ def tf_coef_comp_init(t):
     t.set('coef_type', 'comp')
     t.set('coef_format', 'comp')
     tf_coef_init(t)
+
+def tf_final_clear(t):
+    tf_coef_clear(t)
+
+def tf_final_init(t):
+    generate_coefficients(t)
+    tf_final = t.iirf.iirfilter.tf_coefficients(
+        frequencies = t.frequencies,
+        coefficients = t.get('coef_{}'.format(t.coef_type)),
+        delay = True) * t.iirf.iirfilter.tf_inputfilter(frequencies = t.frequencies)
+
+    tf_abs = np.abs(tf_final)
+    t.set('plot_final_{}_dbs'.format(t.coef_type), 20 * np.log10(tf_abs))
+    t.set('plot_final_{}_phases'.format(t.coef_type),
+          np.angle(tf_final, deg = True))
+
+def tf_final_trad_clear(t):
+    t.set('coef_idx', 0)
+    t.set('coef_type', 'trad')
+    tf_final_clear(t)
+
+def tf_final_trad_init(t):
+    t.set('coef_idx', 0)
+    t.set('coef_type', 'trad')
+    t.set('coef_format', 'trad')
+    tf_final_init(t)
+
+def tf_final_comp_clear(t):
+    t.set('coef_idx', 0)
+    t.set('coef_type', 'comp')
+    tf_final_clear(t)
+
+def tf_final_comp_init(t):
+    t.set('coef_idx', 0)
+    t.set('coef_type', 'comp')
+    t.set('coef_format', 'comp')
+    tf_final_init(t)
 
 def tf_pz_generation(t):
     t.set('tf_pz', np.empty(t.frequencies.shape, dtype=np.complex128))
@@ -1772,6 +1815,8 @@ def test_sequence(t):
         for item in t.plot_items:
             t.run(['{}_clear'.format(item)])
 
+        if DEBUG: logmsg(t, [i for i in t.dump()], title = 'after clear')
+
         loops_samples = round(125e6 / t.test_vectors[t.iter_count, t.fc_idx])
         samples = loops_samples / t.test.loops
 
@@ -1828,7 +1873,7 @@ if __name__ == '__main__':
     network_analyser_init(t)
     #t.set('tf_items', ['desgn', 'meas', 'pz'])
     #t.set('tf_items', ['desgn', 'meas', 'partial'])
-    t.set('tf_items', ['desgn', 'meas', 'coef_trad', 'coef_comp'])
+    t.set('tf_items', ['desgn', 'meas', 'coef_comp']) # 'coef_trad', 'final_trad'
     t.set('plot_items', ['s_plane_proper', 'z_plane_pz', 'tf_dbs', 'tf_phases']) # s_plane_pz
     t.set('plot_sizes', {'s_plane': {'ncols': 1}, 'z_plane': {'ncols': 1}, 'tf': {'nrows': 1}})
 
