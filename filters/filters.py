@@ -850,14 +850,14 @@ def log_extended(t):
 
     log_msg(t, 'rd: {} pd: {} cd: {}'.format(t.rd, t.pd, t.cd), 'partial fraction expansion')
     log_msg(t, '{}'.format(t.iirf.coefficients), 'Coefficients (6 per biquad)')
-    if hasattr(t, 'coef_prop'):
-        log_msg(t, '{}'.format(t.coef_prop), 'Proposed Coefficients (6 per biquad)')
-    if hasattr(t, 'fpga_coef_prop'):
-        log_msg(t, '{}'.format(t.fpga_coef_prop), 'Proposed FPGA Coefficients (6 per biquad)')
-    if hasattr(t, 'coef_leg'):
-        log_msg(t, '{}'.format(t.coef_leg), 'Existing Coefficients (6 per biquad)')
-    if hasattr(t, 'fpga_coef_leg'):
-        log_msg(t, '{}'.format(t.fpga_coef_leg), 'Existing FPGA Coefficients (6 per biquad)')
+    if hasattr(t, 'coef_trad'):
+        log_msg(t, '{}'.format(t.coef_trad), 'Traditional Coefficients (6 per biquad)')
+    if hasattr(t, 'fpga_coef_trad'):
+        log_msg(t, '{}'.format(t.fpga_coef_trad), 'Traditional FPGA Coefficients (6 per biquad)')
+    if hasattr(t, 'coef_comp'):
+        log_msg(t, '{}'.format(t.coef_comp), 'Compact Coefficients (6 per biquad)')
+    if hasattr(t, 'fpga_coef_comp'):
+        log_msg(t, '{}'.format(t.fpga_coef_comp), 'Compact FPGA Coefficients (6 per biquad)')
 
 def omegac_sin(omegac, angle, delta = 0):
     val = np.sin((angle+delta) * np.pi / 180)
@@ -1157,31 +1157,31 @@ def generate_coefficients(t):
         minimize_delay(t)
         extend_to_loops(t)
 
-def fpga_coef_prop_clear(t):
-    tf_coef_prop_clear(t)
+def fpga_coef_trad_clear(t):
+    tf_coef_trad_clear(t)
 
-def fpga_coef_prop_init(t):
+def fpga_coef_trad_init(t):
     t.set('coef_idx', 1)
-    t.set('coef_type', 'prop')
+    t.set('coef_type', 'trad')
     generate_coefficients(t)
     generate_fpga_coefficients(t)
 
-def fpga_coef_leg_clear(t):
-    tf_coef_leg_clear(t)
+def fpga_coef_comp_clear(t):
+    tf_coef_comp_clear(t)
 
-def fpga_coef_leg_init(t):
+def fpga_coef_comp_init(t):
     t.set('coef_idx', 0)
-    t.set('coef_type', 'leg')
+    t.set('coef_type', 'comp')
     generate_coefficients(t)
     generate_fpga_coefficients(t)
 
 def fpga_coef_clear(t):
-    fpga_coef_prop_clear(t)
-    fpga_coef_leg_clear(t)
+    fpga_coef_trad_clear(t)
+    fpga_coef_comp_clear(t)
 
 def fpga_coef_init(t):
-    fpga_coef_prop_init(t)
-    fpga_coef_leg_init(t)
+    fpga_coef_trad_init(t)
+    fpga_coef_comp_init(t)
 
 def tf_coef_generation(t):
     generate_coefficients(t)
@@ -1199,14 +1199,14 @@ def tf_coef_generation(t):
             bq /= zc * zc * biquad[3] - invert * zc * biquad[4] - invert * biquad[5]
             tf_coef[fidx] += bq
 
-def tf_coef_prop_generation(t):
+def tf_coef_trad_generation(t):
     t.set('coef_idx', 1)
-    t.set('coef_type', 'prop')
+    t.set('coef_type', 'trad')
     tf_coef_generation(t)
 
-def tf_coef_leg_generation(t):
+def tf_coef_comp_generation(t):
     t.set('coef_idx', 0)
-    t.set('coef_type', 'leg')
+    t.set('coef_type', 'comp')
     tf_coef_generation(t)
 
 def tf_coef_clear(t):
@@ -1227,24 +1227,24 @@ def tf_coef_init(t):
     t.set('plot_coef_{}_phases'.format(t.coef_type),
           np.angle(t.get('tf_coef_{}'.format(t.coef_type)), deg = True))
 
-def tf_coef_prop_clear(t):
+def tf_coef_trad_clear(t):
     t.set('coef_idx', 1)
-    t.set('coef_type', 'prop')
+    t.set('coef_type', 'trad')
     tf_coef_clear(t)
 
-def tf_coef_prop_init(t):
+def tf_coef_trad_init(t):
     t.set('coef_idx', 1)
-    t.set('coef_type', 'prop')
+    t.set('coef_type', 'trad')
     tf_coef_init(t)
 
-def tf_coef_leg_clear(t):
+def tf_coef_comp_clear(t):
     t.set('coef_idx', 0)
-    t.set('coef_type', 'leg')
+    t.set('coef_type', 'comp')
     tf_coef_clear(t)
 
-def tf_coef_leg_init(t):
+def tf_coef_comp_init(t):
     t.set('coef_idx', 0)
-    t.set('coef_type', 'leg')
+    t.set('coef_type', 'comp')
     tf_coef_init(t)
 
 def tf_pz_generation(t):
@@ -1789,7 +1789,7 @@ if __name__ == '__main__':
     network_analyser_init(t)
     #t.set('tf_items', ['desgn', 'meas', 'pz'])
     #t.set('tf_items', ['desgn', 'meas', 'partial'])
-    t.set('tf_items', ['desgn', 'meas', 'coef_prop', 'coef_leg'])
+    t.set('tf_items', ['desgn', 'meas', 'coef_trad', 'coef_comp'])
     t.set('plot_items', ['s_plane_proper', 'z_plane_pz', 'tf_dbs', 'tf_phases']) # s_plane_pz
     t.set('plot_sizes', {'s_plane': {'ncols': 1}, 'z_plane': {'ncols': 1}, 'tf': {'nrows': 1}})
 
