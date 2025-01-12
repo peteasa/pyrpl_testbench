@@ -4,6 +4,7 @@ import argparse
 from collections import defaultdict   # plotting poles and zeros
 import datetime
 import json
+import logging
 import math
 from matplotlib import patches
 import numpy as np
@@ -577,7 +578,6 @@ class MeasureTransferFunction(Meta):
             pass
 
 def start_logging(t):
-    import logging
     from pathlib import Path
 
     formatter = logging.Formatter('%(levelname)s : %(name)s : %(message)s')
@@ -850,12 +850,16 @@ def log_extended(t):
 
     log_msg(t, 'rd: {} pd: {} cd: {}'.format(t.rd, t.pd, t.cd), 'partial fraction expansion')
     log_msg(t, '{}'.format(t.iirf.coefficients), 'Coefficients (6 per biquad)')
+    #if hasattr(t, 'coef_trad_raw'):
+    #    log_msg(t, '{}'.format(t.coef_trad_raw), 'Raw Traditional Coefficients (6 per biquad)')
     if hasattr(t, 'coef_trad'):
-        log_msg(t, '{}'.format(t.coef_trad), 'Traditional Coefficients (6 per biquad)')
+        log_msg(t, '{}'.format(t.coef_trad), 'Rounded Traditional Coefficients (6 per biquad)')
     if hasattr(t, 'fpga_coef_trad'):
         log_msg(t, '{}'.format(t.fpga_coef_trad), 'Traditional FPGA Coefficients (6 per biquad)')
+    #if hasattr(t, 'coef_comp_raw'):
+    #    log_msg(t, '{}'.format(t.coef_comp_raw), 'Raw Compact Coefficients (6 per biquad)')
     if hasattr(t, 'coef_comp'):
-        log_msg(t, '{}'.format(t.coef_comp), 'Compact Coefficients (6 per biquad)')
+        log_msg(t, '{}'.format(t.coef_comp), 'Rounded Compact Coefficients (6 per biquad)')
     if hasattr(t, 'fpga_coef_comp'):
         log_msg(t, '{}'.format(t.fpga_coef_comp), 'Compact FPGA Coefficients (6 per biquad)')
 
@@ -915,10 +919,14 @@ def z_plane_pz_clear(t):
 def z_plane_pz_init(t):
     if hasattr(t, 'iirf_gain') and not hasattr(t, 'zd'):
         z, p, k = t.iirf.iirfilter.rescaled_sys
+
+        # Expose internals zd to test harness
         zd = np.exp(np.asarray(z, dtype=np.complex128) * t.dt * t.loops)
         pd = np.exp(np.asarray(p, dtype=np.complex128) * t.dt * t.loops)
-        while len(zd) < len(pd):
-            zd = np.append(zd, complex(-1, 0))
+        # Improve stability: add zeros at s = \infty fix up IirFilter.coefficients
+        # applying the following and uncomment the following
+        #while len(zd) < len(pd):
+        #    zd = np.append(zd, complex(-1, 0))
 
         t.set('zd', zd)
         if hasattr(t, 'pd') and not np.array_equal(t.pd, pd):
@@ -979,8 +987,8 @@ def tf_partial_init(t):
 
 def rp2coefficients(t):
     ## copied from iir_theory with minor changes
-    coef = 'coef_{}'.format(t.coef_type)
-    if hasattr(t, 'rd') and not hasattr(t, coef):
+    coef_raw = 'coef_{}_raw'.format(t.coef_type)
+    if hasattr(t, 'rd') and not hasattr(t, coef_raw):
         t.getcreate('tol', default = 1e-3)
         N = int(np.ceil(float(len(t.pd)) / 2.0))
         if t.cd != 0:
@@ -988,12 +996,12 @@ def rp2coefficients(t):
         if N == 0:
             t.logmsg(t,
                 'Warning: No poles or zeros defined. Filter will be turned off!')
-            coeff = t.set(coef, np.zeros((1, 6), dtype=np.float64))
+            coeff = t.set(coef_raw, np.zeros((1, 6), dtype=np.float64))
             coeff[0, 0] = 0
             coeff[:, 3] = 1.0
-            return t.get(coef)
+            return t.get(coef_raw)
 
-        coeff = t.set(coef, np.zeros((N, 6), dtype=np.float64))
+        coeff = t.set(coef_raw, np.zeros((N, 6), dtype=np.float64))
         coeff[0, 0] = 0
         coeff[:, 3] = 1.0
 
@@ -1047,7 +1055,7 @@ def rp2coefficients(t):
         if t.cd != 0:
             coeff[-1, 0] = t.cd
 
-        return t.get(coef)
+        return t.get(coef_raw)
 
 def sos2zpk(sos):
     ## copied from iir_theory
@@ -1071,10 +1079,10 @@ def sos2zpk(sos):
 
 def minimize_delay(t):
     ## copied from iir_theory
-    coef = 'coef_{}'.format(t.coef_type)
-    if hasattr(t, coef):
+    coef_raw = 'coef_{}_raw'.format(t.coef_type)
+    if hasattr(t, coef_raw):
         ranks = list()
-        for c in list(t.get(coef)):
+        for c in list(t.get(coef_raw)):
             # empty sections (numerator is 0) are ranked 0
             if (c[0:3] == 0).all():
                 ranks.append(0)
@@ -1089,23 +1097,23 @@ def minimize_delay(t):
                 ranks.append(f)
 
         newcoefficients = [c for (rank, c) in
-                           sorted(zip(ranks, list(t.get(coef))),
+                           sorted(zip(ranks, list(t.get(coef_raw))),
                                   key=lambda pair: -pair[0])]
 
-        t.set(coef, np.array(newcoefficients))
+        t.set(coef_raw, np.array(newcoefficients))
 
-        return t.get(coef)
+        return t.get(coef_raw)
 
 def finiteprecision(t):
     ## copied from iir_theory finiteprecision
+    coef_raw = 'coef_{}_raw'.format(t.coef_type)
     coef = 'coef_{}'.format(t.coef_type)
-    rounded_coef = 'rounded_coef_{}'.format(t.coef_type)
-    if hasattr(t, coef) and not hasattr(t, rounded_coef):
+    if hasattr(t, coef_raw) and not hasattr(t, coef):
         t.getcreate('iirbits', default = 32)
         t.getcreate('iirshift', default = 29)
-        rounded_coeff = t.set(rounded_coef, np.zeros(t.get(coef).shape, dtype=np.float64))
-        rounded_coeff += t.get(coef)
-        for x in np.nditer(rounded_coeff, op_flags=['readwrite']):
+        coeff = t.set(coef, np.zeros(t.get(coef_raw).shape, dtype=np.float64))
+        coeff += t.get(coef_raw)
+        for x in np.nditer(coeff, op_flags=['readwrite']):
             xr = np.round(x * 2 ** t.iirshift)
             xmax = 2 ** (t.iirbits - 1)
             if xr == 0 and xr != 0:
@@ -1123,7 +1131,7 @@ def finiteprecision(t):
 
             x[...] = 2 ** (-t.iirshift) * xr
 
-    return t.get(rounded_coef)
+    return t.get(coef)
 
 def generate_fpga_coefficients(t):
     ## adapted from iir coefficients
@@ -1133,7 +1141,7 @@ def generate_fpga_coefficients(t):
     if hasattr(t, coef) and not hasattr(t, fpga_coef):
         t.getcreate('iirbits', default = 32)
         t.getcreate('iirshift', default = 29)
-        coeff = finiteprecision(t)
+        coeff = t.get(coef)
         f = coeff * 2 ** t.iirshift
         fpga_coeff = t.set(fpga_coef, f.astype(int))
         for i in range(fpga_coeff.shape[0]):
@@ -1143,35 +1151,34 @@ def generate_fpga_coefficients(t):
         return t.get(fpga_coef)
 
 def extend_to_loops(t):
-    coef = 'coef_{}'.format(t.coef_type)
-    if hasattr(t, coef) and t.get(coef).shape[0] < t.loops:
-        for i in range(t.loops - t.get(coef).shape[0]):
+    coef_raw = 'coef_{}_raw'.format(t.coef_type)
+    if hasattr(t, coef_raw) and t.get(coef_raw).shape[0] < t.loops:
+        for i in range(t.loops - t.get(coef_raw).shape[0]):
             bq = np.array([[0.0, 0.0, 0.0, 1.0, 0.0, 0.0]], dtype = float)
-            t.set(coef, np.concatenate((t.get(coef), bq)))
+            t.set(coef_raw, np.concatenate((t.get(coef_raw), bq)))
 
 def generate_coefficients(t):
-    coef = 'coef_{}'.format(t.coef_type)
-    if not hasattr(t, coef):
-        partial_init(t)
-        rp2coefficients(t)
-        minimize_delay(t)
-        extend_to_loops(t)
+    coef_raw = 'coef_{}_raw'.format(t.coef_type)
+    if not hasattr(t, coef_raw):
+        t.run(['partial_init', 'rp2coefficients', 'minimize_delay', 'extend_to_loops', 'finiteprecision'])
 
 def fpga_coef_trad_clear(t):
-    tf_coef_trad_clear(t)
+    tf_coef_trad_raw_clear(t)
 
 def fpga_coef_trad_init(t):
     t.set('coef_idx', 1)
     t.set('coef_type', 'trad')
+    t.set('coef_format', 'trad')
     generate_coefficients(t)
     generate_fpga_coefficients(t)
 
 def fpga_coef_comp_clear(t):
-    tf_coef_comp_clear(t)
+    tf_coef_comp_raw_clear(t)
 
 def fpga_coef_comp_init(t):
     t.set('coef_idx', 0)
     t.set('coef_type', 'comp')
+    t.set('coef_format', 'trad')
     generate_coefficients(t)
     generate_fpga_coefficients(t)
 
@@ -1186,35 +1193,42 @@ def fpga_coef_init(t):
 def tf_coef_generation(t):
     generate_coefficients(t)
 
-    tf_coef = t.set('tf_coef_{}'.format(t.coef_type), np.empty(t.frequencies.shape, dtype=np.complex128))
+    coef = 'coef_{}'.format(t.coef_format)
+    tf_coef = 'tf_coef_{}'.format(t.coef_format)
+    tf_coeff = t.set(tf_coef, np.empty(t.frequencies.shape, dtype=np.complex128))
     invert = -1.0
     for fidx, fz in enumerate(t.frequencies):
         angle = np.pi * fz * t.dt * t.loops
         zc = complex( np.cos(angle),
                       np.sin(angle) )
 
-        tf_coef[fidx] = 0.0
-        for biquad in t.get('coef_{}'.format(t.coef_type)):
+        tf_coeff[fidx] = 0.0
+        for biquad in t.get(coef):
             bq = zc * zc * biquad[0] + zc * biquad[1] + biquad[2]
             bq /= zc * zc * biquad[3] - invert * zc * biquad[4] - invert * biquad[5]
-            tf_coef[fidx] += bq
+            tf_coeff[fidx] += bq
 
-def tf_coef_trad_generation(t):
+def tf_coef_trad_raw_generation(t):
     t.set('coef_idx', 1)
     t.set('coef_type', 'trad')
+    t.set('coef_format', 'trad_raw')
     tf_coef_generation(t)
 
-def tf_coef_comp_generation(t):
+def tf_coef_comp_raw_generation(t):
     t.set('coef_idx', 0)
     t.set('coef_type', 'comp')
+    t.set('coef_format', 'comp_raw')
     tf_coef_generation(t)
 
 def tf_coef_clear(t):
-    if hasattr(t, 'coef_{}'.format(t.coef_type)):
+    if hasattr(t, 'coef_{}_raw'.format(t.coef_type)):
+        t.pop('coef_{}_raw'.format(t.coef_type))
         t.pop('coef_{}'.format(t.coef_type))
-        t.pop('rounded_coef_{}'.format(t.coef_type))
         t.pop('fpga_coef_{}'.format(t.coef_type))
+        t.pop('tf_coef_{}_raw'.format(t.coef_type))
         t.pop('tf_coef_{}'.format(t.coef_type))
+        t.pop('plot_coef_{}_raw_dbs'.format(t.coef_type))
+        t.pop('plot_coef_{}_raw_phases'.format(t.coef_type))
         t.pop('plot_coef_{}_dbs'.format(t.coef_type))
         t.pop('plot_coef_{}_phases'.format(t.coef_type))
 
@@ -1222,10 +1236,22 @@ def tf_coef_init(t):
     # generate the transfer function from the z-plane poles and zeros
     tf_coef_generation(t)
 
-    tf_abs = np.abs(t.get('tf_coef_{}'.format(t.coef_type)))
-    t.set('plot_coef_{}_dbs'.format(t.coef_type), 20 * np.log10(tf_abs))
-    t.set('plot_coef_{}_phases'.format(t.coef_type),
-          np.angle(t.get('tf_coef_{}'.format(t.coef_type)), deg = True))
+    tf_coef = 'tf_coef_{}'.format(t.coef_format)
+    tf_abs = np.abs(t.get(tf_coef))
+    t.set('plot_coef_{}_dbs'.format(t.coef_format), 20 * np.log10(tf_abs))
+    t.set('plot_coef_{}_phases'.format(t.coef_format),
+          np.angle(t.get('tf_coef_{}'.format(t.coef_format)), deg = True))
+
+def tf_coef_trad_raw_clear(t):
+    t.set('coef_idx', 1)
+    t.set('coef_type', 'trad')
+    tf_coef_clear(t)
+
+def tf_coef_trad_raw_init(t):
+    t.set('coef_idx', 1)
+    t.set('coef_type', 'trad')
+    t.set('coef_format', 'trad_raw')
+    tf_coef_init(t)
 
 def tf_coef_trad_clear(t):
     t.set('coef_idx', 1)
@@ -1235,6 +1261,18 @@ def tf_coef_trad_clear(t):
 def tf_coef_trad_init(t):
     t.set('coef_idx', 1)
     t.set('coef_type', 'trad')
+    t.set('coef_format', 'trad')
+    tf_coef_init(t)
+
+def tf_coef_comp_raw_clear(t):
+    t.set('coef_idx', 0)
+    t.set('coef_type', 'comp')
+    tf_coef_clear(t)
+
+def tf_coef_comp_raw_init(t):
+    t.set('coef_idx', 0)
+    t.set('coef_type', 'comp')
+    t.set('coef_format', 'comp_raw')
     tf_coef_init(t)
 
 def tf_coef_comp_clear(t):
@@ -1245,6 +1283,7 @@ def tf_coef_comp_clear(t):
 def tf_coef_comp_init(t):
     t.set('coef_idx', 0)
     t.set('coef_type', 'comp')
+    t.set('coef_format', 'comp')
     tf_coef_init(t)
 
 def tf_pz_generation(t):
