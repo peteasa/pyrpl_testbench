@@ -789,10 +789,18 @@ def plt_freq_response(t, values, title, ylabels):
     t.plotspec['row'] += 1
     if t.plotspec['row'] > t.plot_rows: t.plotspec['row'] = 0
 
-def log_msg(t, msg, title = ''):
+def log_msg(t, msg, title = '', loglevel = logging.INFO):
     logfn = print
     if hasattr(t, 'logger'):
         logfn = t.logger.info
+        if loglevel == logging.WARNING:
+            logfn = t.logger.warning
+        elif loglevel == logging.ERROR:
+            logfn = t.logger.error
+        elif loglevel == logging.CRITICAL:
+            logfn = t.logger.critical
+        elif loglevel == logging.DEBUG:
+            logfn = t.logger.debug
 
     if 0 < len(title):
         logfn(title)
@@ -1101,13 +1109,17 @@ def finiteprecision(t):
             xr = np.round(x * 2 ** t.iirshift)
             xmax = 2 ** (t.iirbits - 1)
             if xr == 0 and xr != 0:
-                t.logmsg(t, 'WARNING: One value was rounded off to zero: Increase shiftbits in fpga design if this is a problem!')
+                t.logmsg(t,
+                         'One value was rounded off to zero: Increase shiftbits in fpga design if this is a problem!',
+                         loglevel = logging.WARNING)
             elif xr > xmax - 1:
                 xr = xmax - 1
-                t.logmsg(t, 'WARNING: One value saturates positively: Increase totalbits or decrease gain!')
+                t.logmsg(t, 'One value saturates positively: Increase totalbits or decrease gain!',
+                         loglevel = logging.WARNING)
             elif xr < -xmax:
                 xr = -xmax
-                t.logmsg(t, 'WARNING: One value saturates negatively: Increase totalbits or decrease gain!')
+                t.logmsg(t, 'One value saturates negatively: Increase totalbits or decrease gain!',
+                         loglevel = logging.WARNING)
 
             x[...] = 2 ** (-t.iirshift) * xr
 
