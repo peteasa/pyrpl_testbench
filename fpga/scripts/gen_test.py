@@ -191,6 +191,9 @@ if __name__ == '__main__':
     loops = 6
     coefs = np.array([[],[],[],[]], dtype = np.uint32)
     #cnames = ['b0', 'b1', 'a1', 'a2']
+    #
+    # Note to generate real coefficient values run the 'fpga_coef_init' step in filters/filters.py
+    #
     for i in range(loops - 1):
         coefs = np.append(coefs, [[0x10000A+i],[0x10100A+i],[0x10200A+i],[0x10300A+i]], axis = 1)
 
