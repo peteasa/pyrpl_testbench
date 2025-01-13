@@ -489,11 +489,12 @@ class TestBench(Meta):
             globals()[func](self)
 
 class MeasureTransferFunction(Meta):
-    def __init__(self, t, tf):
+    def __init__(self, t, tf, title):
         if hasattr(t, 'logger'):
             self.set('logger', t.logger)
 
         self.set('tf', tf)
+        self.set('title', 'Measurements from {}'.format(title))
         self.set('frequencies', t.frequencies)
 
         ttype = gen_test_type(t.test)
@@ -523,7 +524,7 @@ class MeasureTransferFunction(Meta):
             self.gain,
             self.tf_max,
             self.gain_adjust_correction)
-        log_msg(self, msg)
+        log_msg(self, msg, self.title)
 
         self.gain_from_phase()
         self.gain_from_amplitude()
@@ -869,8 +870,9 @@ def log_extended(t):
     log_msg(t, 'adjusted gain: {}'.format(t.proper_gain))
     log_zp(t, t.proper_zeros, t.proper_poles, 'proper zeros and poles')
 
-    log_msg(t, 'rescaled_sys k: {}'.format(t.k))
-    log_zp(t, t.zd, t.pd, 'z-plane zeros and poles')
+    if hasattr(t, 'zd'):
+        log_msg(t, 'rescaled_sys k: {}'.format(t.k))
+        log_zp(t, t.zd, t.pd, 'z-plane zeros and poles')
 
     if not hasattr(t, 'rd'):
         partial_init(t)
@@ -918,6 +920,21 @@ def generate_f(start, stop, count):
         count,
         endpoint=True)
 
+def getcreate_frequencies(t):
+    if not hasattr(t, 'frequencies'):
+        log_msg(t, 'run_test(t) has not been called: generating tf frequencies',
+                loglevel = logging.WARNING)
+        if (hasattr(t, 'tf_items') and 'meas' in t.tf_items) or \
+           (hasattr(t, 'tf_measure_items') and 'meas' in t.tf_measure_items):
+            log_msg(t, 'run_test(t) has not been called: no measured transfer function',
+                    loglevel = logging.ERROR)
+
+        # to iterate over several fc values
+        t.test.getcreate('fc_count', 3*5+1)
+        t.test.getcreate('fc_start', 1e4)
+        t.test.getcreate('fc_stop', 1e7)
+        t.getcreate('frequencies', generate_f(t.test.fc_start, t.test.fc_stop, t.test.fc_count))
+
 def s_plane_proper_init(t):
     if hasattr(t, 'iirf_gain') and not hasattr(t, 'proper_zeros'):
         (zeros, poles, gain) = t.iirf.iirfilter.proper_sys
@@ -945,7 +962,7 @@ def z_plane_pz_init(t):
 
         t.set('zd', zd)
         if hasattr(t, 'pd') and not np.array_equal(t.pd, pd):
-            logmsg(t, 'z_plane_pz_init pd: {} old pd: {}'.format(pd, t.pd),
+            log_msg(t, 'z_plane_pz_init pd: {} old pd: {}'.format(pd, t.pd),
                    loglevel = logging.WARNING)
 
         t.set('pd', pd)
@@ -961,7 +978,7 @@ def partial_init(t):
         t.set('rd', rd)
         t.set('cd', cd)
         if hasattr(t, 'pd') and not np.array_equal(t.pd, pd):
-            logmsg(t, 'partial_init pd: {} old pd: {}'.format(pd, t.pd),
+            log_msg(t, 'partial_init pd: {} old pd: {}'.format(pd, t.pd),
                    loglevel = logging.WARNING)
 
         t.set('pd', pd)
@@ -998,7 +1015,7 @@ def rp2coefficients(t):
         if t.cd != 0:
             N += 1
         if N == 0:
-            logmsg(t,
+            log_msg(t,
                    'No poles or zeros defined. Filter will be turned off!',
                    loglevel = logging.WARNING)
             coeff = t.set(coef_raw, np.zeros((1, 6), dtype=np.float64))
@@ -1027,7 +1044,7 @@ def rp2coefficients(t):
                 diff = np.abs(np.asarray(pc) - np.conjugate(pp))
                 index = np.argmin(diff)
                 if diff[index] > t.tol:
-                    logmsg(t,
+                    log_msg(t,
                            'Conjugate partner for pole {} deviates from expected value by {} > {}'.format(
                                pp, diff[index], t.tol))
                 complexp.append((pp + np.conjugate(pc.pop(index))) / 2.0)
@@ -1121,16 +1138,16 @@ def finiteprecision(t):
             xr = np.round(x * 2 ** t.iirshift)
             xmax = 2 ** (t.iirbits - 1)
             if xr == 0 and xr != 0:
-                logmsg(t,
+                log_msg(t,
                        'One value was rounded off to zero: Increase shiftbits in fpga design if this is a problem!',
                        loglevel = logging.WARNING)
             elif xr > xmax - 1:
                 xr = xmax - 1
-                logmsg(t, 'One value saturates positively: Increase totalbits or decrease gain!',
+                log_msg(t, 'One value saturates positively: Increase totalbits or decrease gain!',
                        loglevel = logging.WARNING)
             elif xr < -xmax:
                 xr = -xmax
-                logmsg(t, 'One value saturates negatively: Increase totalbits or decrease gain!',
+                log_msg(t, 'One value saturates negatively: Increase totalbits or decrease gain!',
                        loglevel = logging.WARNING)
 
             x[...] = 2 ** (-t.iirshift) * xr
@@ -1255,23 +1272,31 @@ def tf_final_init(t):
         coefficients = t.get('coef_{}'.format(t.coef_type)),
         delay = True) * t.iirf.iirfilter.tf_inputfilter(frequencies = t.frequencies)
 
-    tf_abs = np.abs(tf_final)
-    t.set('plot_final_{}_dbs'.format(t.coef_type), 20 * np.log10(tf_abs))
-    t.set('plot_final_{}_phases'.format(t.coef_type),
-          np.angle(tf_final, deg = True))
-
+    tf_mtfn = 'tf_final_{}_mtfn'.format(t.coef_type)
+    t.set(tf_mtfn,
+          MeasureTransferFunction(t, tf_final, '{} coefficients'.format(t.coef_type)))
+    t.set('plot_final_{}_dbs'.format(t.coef_type), t.get(tf_mtfn).dbs)
+    t.set('plot_final_{}_phases'.format(t.coef_type), t.get(tf_mtfn).phases)
 
 def tf_final_trad_init(t):
-    t.set('coef_idx', 0)
-    t.set('coef_type', 'trad')
-    t.set('coef_format', 'trad')
-    tf_final_init(t)
+    if not hasattr(t, 'tf_final_trad_mtfn'):
+        t.set('coef_idx', 0)
+        t.set('coef_type', 'trad')
+        t.set('coef_format', 'trad')
+        tf_final_init(t)
+
+def tf_peak_gain_final_trad_init(t):
+    t.tf_final_trad_mtfn.peak_gain()
 
 def tf_final_comp_init(t):
-    t.set('coef_idx', 0)
-    t.set('coef_type', 'comp')
-    t.set('coef_format', 'comp')
-    tf_final_init(t)
+    if not hasattr(t, 'tf_final_comp_mtfn'):
+        t.set('coef_idx', 0)
+        t.set('coef_type', 'comp')
+        t.set('coef_format', 'comp')
+        tf_final_init(t)
+
+def tf_peak_gain_final_comp_init(t):
+    t.tf_final_comp_mtfn.peak_gain()
 
 def tf_pz_generation(t):
     t.set('tf_pz', np.empty(t.frequencies.shape, dtype=np.complex128))
@@ -1297,10 +1322,15 @@ def tf_pz_init(t):
     t.set('plot_pz_phases', np.angle(t.tf_pz, deg = True))
 
 def tf_desgn_init(t):
-    t.set('designdata', t.iirf.transfer_function(t.frequencies))
-    tf_abs = np.abs(t.designdata)
-    t.set('plot_desgn_dbs', 20 * np.log10(tf_abs))
-    t.set('plot_desgn_phases', np.angle(t.designdata, deg = True))
+    if not hasattr(t, 'tf_desgn_mtfn'):
+        t.set('tf_desgn', t.iirf.transfer_function(t.frequencies))
+        t.set('tf_desgn_mtfn', MeasureTransferFunction(t, t.tf_desgn, 'designed system'))
+
+    t.set('plot_desgn_dbs', t.tf_desgn_mtfn.dbs)
+    t.set('plot_desgn_phases', t.tf_desgn_mtfn.phases)
+
+def tf_peak_gain_desgn_init(t):
+    t.tf_desgn_mtfn.peak_gain()
 
 def characterise_transfer_function(data, frequencies, condition):
     idxs = np.where(condition)
@@ -1310,19 +1340,27 @@ def characterise_transfer_function(data, frequencies, condition):
     return fminidx_lo, fminidx_hi
 
 def tf_meas_init(t):
-    if not hasattr(t, 'tf_measurement'):
-        t.set('tf_measurement', MeasureTransferFunction(t, t.tf))
+    if not hasattr(t, 'tf_meas_mtfn'):
+        t.set('tf_meas_mtfn', MeasureTransferFunction(t, t.tf, 'measured system'))
 
-    t.set('plot_meas_phases', t.tf_measurement.phases)
-    t.set('plot_meas_dbs', t.tf_measurement.dbs)
+    t.set('plot_meas_phases', t.tf_meas_mtfn.phases)
+    t.set('plot_meas_dbs', t.tf_meas_mtfn.dbs)
 
-def tf_characterisation_init(t):
-    if not hasattr(t, 'tf_measurement'):
-        t.set('tf_measurement', MeasureTransferFunction(t, t.tf))
+def tf_peak_gain_meas_init(t):
+    t.tf_meas_mtfn.peak_gain()
 
-    t.tf_measurement.peak_gain()
+def tf_measure_init(t):
+    getcreate_frequencies(t)
+    for item in t.tf_measure_items:
+        if not hasattr(t, 'tf_{}_mtfn'.format(item)):
+            t.run(['tf_{}_init'.format(item)])
+
+        initfn = 'tf_peak_gain_{}_init'.format(item)
+        if DEBUG: print('tf_measure_init: {}'.format(initfn))
+        t.run([initfn])
 
 def tf_dbs_init(t):
+    getcreate_frequencies(t)
     for item in t.tf_items:
         if not hasattr(t, 'plot_{}_dbs'.format(item)):
             initfn = 'tf_{}_init'.format(item)
@@ -1344,6 +1382,7 @@ def plot_tf_dbs(t):
     plt_freq_response(t, to_plot, 'frequency response', labels)
 
 def tf_phases_init(t):
+    getcreate_frequencies(t)
     for item in t.tf_items:
         if not hasattr(t, 'plot_{}_phases'.format(item)):
             initfn = 'tf_{}_init'.format(item)
@@ -1365,18 +1404,24 @@ def plot_tf_phases(t):
     plt_freq_response(t, to_plot, 'phase response', labels)
 
 def plot_results(t):
-    plotting_init(t)
-    plotting_config(t)
+    if 0 < len(t.plot_items):
+        plotting_init(t)
+        plotting_config(t)
 
-    for item in t.plot_items:
-        initfn = '{}_init'.format(item)
-        plotfn = 'plot_{}'.format(item)
-        if DEBUG: print('plot_results: {}'.format(initfn))
-        t.run([initfn, plotfn])
+        ## plotting_run(t)
+        for item in t.plot_items:
+            initfn = '{}_init'.format(item)
+            plotfn = 'plot_{}'.format(item)
+            if DEBUG: print('plot_results: {}'.format(initfn))
+            t.run([initfn, plotfn])
 
-    if hasattr(t, 'svg') and t.svg:
-        freq = '{:08.0f}'.format(t.fc)
-        t.plt.savefig('{}_{}.svg'.format(t.test.filename, freq))
+        ## TODO
+        ## plot_zp_splane
+        #plot_zp(t, t.zeros, t.poles, 's-plane poles and zeros')
+
+        if hasattr(t, 'svg') and t.svg:
+            freq = '{:08.0f}'.format(t.fc)
+            t.plt.savefig('{}_{}.svg'.format(t.test.filename, freq))
 
 def is_similar(f, cf):
     d = 1.25e8 / f
@@ -1596,8 +1641,8 @@ def iirf_gain_adjust_correction(t):
     for i in range(3):
         freq.append(t.fc * (i+1))
 
-    designdata = t.iirf.transfer_function([t.fc/4, t.fc/3, t.fc/2, t.fc, t.fc*2, t.fc*3, t.fc*4])
-    tf_abs = np.abs(designdata)
+    tf_design = t.iirf.transfer_function([t.fc/4, t.fc/3, t.fc/2, t.fc, t.fc*2, t.fc*3, t.fc*4])
+    tf_abs = np.abs(tf_design)
 
     return gain_adjust_correction(t, t.gain_adjust, tf_abs.max())
 
@@ -1760,15 +1805,15 @@ def test_sequence(t):
 
         run_test(t)
 
-        # measure the transfer function
-        tf_characterisation_init(t)
+        # measure the transfer functions
+        tf_measure_init(t)
 
         if hasattr(t, 'iter_count'):
             # save calibration result - t.fc_idx, t.gain_adjust_idx
             t.getcreate('results', np.empty((0, 2), dtype = float))
             t.keepattrinlevel('results')
 
-            result = np.array([[t.fc, t.tf_measurement.gain_adjust_correction]], dtype = float)
+            result = np.array([[t.fc, t.tf_meas_mtfn.gain_adjust_correction]], dtype = float)
             t.results = np.concatenate((t.results, result))
 
         if hasattr(t.test, 'plot') and t.test.plot and hasattr(t, 'iter_count') and t.iter_count % 5 == 0:
@@ -1783,18 +1828,20 @@ if __name__ == '__main__':
 
     iirf_init(t)
     network_analyser_init(t)
-    #t.set('tf_items', ['desgn', 'meas', 'pz'])
-    #t.set('tf_items', ['desgn', 'meas', 'partial'])
-    t.set('tf_items', ['desgn', 'meas', 'coef_comp']) # 'coef_trad', 'final_trad'
-    t.set('plot_items', ['s_plane_proper', 'z_plane_pz', 'tf_dbs', 'tf_phases']) # s_plane_pz
+    t.set('tf_measure_items', ['desgn', 'meas', 'final_comp', 'final_trad'])
+    # other possible tf_items are: 'pz', 'partial', 'final_comp', 'coef_trad'
+    t.set('tf_items', ['desgn', 'meas', 'coef_comp', 'final_trad'])
+    # other possible items to plot include: 's_plane_pz'
+    t.set('plot_items', ['s_plane_proper', 'z_plane_pz', 'tf_dbs', 'tf_phases'])
     t.set('plot_sizes', {'s_plane': {'ncols': 1}, 'z_plane': {'ncols': 1}, 'tf': {'nrows': 1}})
 
     t.set('svg', True)
 
-    # 'fpga_coef_init' generates the values saved to the fpga
+    # 'fpga_coef_init' generates the values that would be saved to the fpga
+    # 'tf_measure_init' logs measurement from the transfer functions produced
 
     # run single item
-    # t.run(['configure_gain', 'generate_poles_zeros', 'iirf_setup', 'log_basics', 'run_test', 'tf_characterisation_init', 'plot_results', 'log_extended'])
+    # t.run(['configure_gain', 'generate_poles_zeros', 'iirf_setup', 'log_basics', 'run_test', 'tf_measure_init', 'fpga_coef_init', 'plot_results', 'log_extended'])
     # run sequence
     t.run(['get_create_gain_adjust', 'test_sequence'])
 

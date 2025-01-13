@@ -2,6 +2,7 @@
 
 import argparse
 import json
+#import logging
 import numpy as np
 import pyrpl
 from pyrpl.async_utils import sleep
@@ -204,6 +205,7 @@ class CalData(object):
 class Meta(object):
     def __init__(self):
         self._startdir = None
+        self._levels = {}
         self._finish_init()
 
     def _finish_init(self):
@@ -236,6 +238,32 @@ class Meta(object):
                 delattr(self, name)
 
         return _inst
+
+    def cleartolevel(self, level = None):
+        """pop new items"""
+        _level = 'default_level' if level is None else level
+        if _level in self._levels:
+            items = [a for a in dir(self) if not a in self._levels[_level]]
+            for item in items:
+                self.pop(item)
+        else:
+            self._levels[_level] = dir(self)
+
+    def keepattrinlevel(self, item, level = None):
+        """add new item to level"""
+        if level is None:
+            for level in self._levels.keys():
+                if not item in self._levels[level]:
+                    self._levels[level].append(item)
+        else:
+            if level in self._levels and not item in self._levels[level]:
+                self._levels[level].append(item)
+
+    def dellevel(self, level = None):
+        """delete the level"""
+        _level = 'default_level' if level is None else level
+        if _level in self._levels:
+            del self._levels[_level]
 
     def dump(self):
         return ((a, self.get(a)) for a in dir(self) if not a in self._startdir)
@@ -322,7 +350,6 @@ class DummyR(object):
 
         setattr(self, 'scope', self.scope())
 
-
 class DummyP(object):
     class spectrumanalyzer(object):
         def __init__(self):
@@ -360,9 +387,10 @@ class TestBench(Meta):
         #self._r = DummyR()
         self._p = pyrpl.Pyrpl(config = test.rpconf, hostname = HOSTNAME, gui = False)
         self._r = self.p.rp
-        #start_logging()
         self._name = test.name
         self._test = test
+
+        #start_logging(self)
 
         # only call __init__ after all attributes have been created
         super().__init__()
@@ -409,8 +437,8 @@ class TestBench(Meta):
         for func in seq:
             globals()[func](self)
 
-def start_logging():
-    import logging
+def start_logging(t):
+    from pathlib import Path
 
     formatter = logging.Formatter('%(levelname)s : %(name)s : %(message)s')
 
@@ -420,23 +448,24 @@ def start_logging():
     console.setFormatter(formatter)
 
     # get the root logger
-    logger = logging.getLogger('')
+    t.set('logger', logging.getLogger(''))
 
-    logger.handlers.clear()
+    t.logger.handlers.clear()
     #logger.addHandler(console)
 
-    filename = 'pyrpl.log'
+    filename = '{}.log'.format(t.test.filename)
 
     fh = logging.FileHandler(filename)
     fh.setFormatter(formatter)
 
     # send debug logs to filehandler
     fh.setLevel(logging.DEBUG)
-    logger.setLevel(logging.INFO)
-    logger.addHandler(fh)
+    t.logger.setLevel(logging.INFO)
+    t.logger.addHandler(fh)
 
+    t.logger.info('Running: {}'.format(Path(__file__).name))
     msg = 'pyrpl version: {}'.format(pyrpl.__version__)
-    logger.info(msg)
+    t.logger.info(msg)
 
     levels = {'pyrpl.hardware_modules.iir': logging.DEBUG,
               'pyrpl.hardware_modules.iir.iir': logging.DEBUG,
