@@ -75,7 +75,14 @@ If command line arguments are used in a specific test then it is recommended tha
 
 There are several methods to get or create attributes on the test or TestBench objects (get(), set(), getcreate() and set_test_ifcal()).  The latter method is used specifically when the calibration step is used to define the type of test or specify a specific test vector.  In the calibration case the design could be that the test vector provided will override whatever the current value in the test definition (ie the set() method is used to create / override the current attribute). When performing a subsequent test run the same point in the code without calibrate defined will use the existing value (using getcreate() method) rather than override the test vector.  In the case where there is no prior calibration data then the getcreate() method will create the attribute for the test vector.
 
-In addition to the creation of attributes on the TestBench and test definition objects it is possible to clear() all the recently created attributes or pop() a given attribute from the dictionary of custom attributes added to the object.
+In addition to the creation of attributes on the TestBench and test definition objects it is possible to clear() all the recently created attributes or pop() a given attribute from the dictionary of custom attributes added to the object.  A useful extension of this is to be able to clear multiple intermediate variables that are no longer needed with one api call.  For example when running a sequence of tests, shared values can be difficult to remove with pop().  With a single call to the TestBench method cleartolevel() at the start of a loop it is possible to remove old variables added in the previous iteration.  All attributes added to the TestBench after the call to cleartolevel() are removed at the start of the next iteration.
+```
+for i in range(t.max_iter):
+    t.cleartolevel()
+    ...
+    t.results[i] = tf
+    t.keepattrinlevel('results')
+```
 
 ## PyRPL calibration
 One important element missing from the toolbox provided by the PyRPL code is a calibration module for the RedPitaya tools. Calibration is a complicated subject and is best documented [here](https://redpitaya.readthedocs.io/en/latest/appsFeatures/systemtool/calibration.html) and [here](https://redpitaya.readthedocs.io/en/latest/developerGuide/hardware/hw_specs/fastIO.html#analog-inputs-calibration).  The internal RedPitaya calibration coefficients are not available to the PyRPL code and if they were the more complicated tools available with the PyRPL code may not be easy to calibrate.  Having said that it is useful to have a simple calibration object when using the PyRPL code.  The TestBench provides access (t.c) to some simple calibration tools.

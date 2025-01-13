@@ -192,6 +192,7 @@ class CalData(object):
 class Meta(object):
     def __init__(self):
         self._startdir = None
+        self._levels = {}
         self._finish_init()
 
     def _finish_init(self):
@@ -224,6 +225,32 @@ class Meta(object):
                 delattr(self, name)
 
         return _inst
+
+    def cleartolevel(self, level = None):
+        """pop new items"""
+        _level = 'default_level' if level is None else level
+        if _level in self._levels:
+            items = [a for a in dir(self) if not a in self._levels[_level]]
+            for item in items:
+                self.pop(item)
+        else:
+            self._levels[_level] = dir(self)
+
+    def keepattrinlevel(self, item, level = None):
+        """add new item to level"""
+        if level is None:
+            for level in self._levels.keys():
+                if not item in self._levels[level]:
+                    self._levels[level].append(item)
+        else:
+            if level in self._levels and not item in self._levels[level]:
+                self._levels[level].append(item)
+
+    def dellevel(self, level = None):
+        """delete the level"""
+        _level = 'default_level' if level is None else level
+        if _level in self._levels:
+            del self._levels[_level]
 
     def dump(self):
         return ((a, self.get(a)) for a in dir(self) if not a in self._startdir)
@@ -891,12 +918,6 @@ def generate_f(start, stop, count):
         count,
         endpoint=True)
 
-def s_plane_proper_clear(t):
-    if hasattr(t, 'proper_zeros'):
-        t.pop('proper_zeros')
-        t.pop('proper_poles')
-        t.pop('proper_gain')
-
 def s_plane_proper_init(t):
     if hasattr(t, 'iirf_gain') and not hasattr(t, 'proper_zeros'):
         (zeros, poles, gain) = t.iirf.iirfilter.proper_sys
@@ -909,12 +930,6 @@ def plot_s_plane_proper(t):
         plot_zp(t, t.proper_zeros, t.proper_poles,
                 'proper ze: {} po: {}'.format(
                     len(t.proper_zeros), len(t.proper_poles)))
-
-def z_plane_pz_clear(t):
-    if hasattr(t, 'zd'):
-        t.pop('zd')
-        t.pop('pd')
-        t.pop('k')
 
 def z_plane_pz_init(t):
     if hasattr(t, 'iirf_gain') and not hasattr(t, 'zd'):
@@ -940,12 +955,6 @@ def plot_z_plane_pz(t):
     if hasattr(t, 'zd'):
         plot_zp(t, t.zd, t.pd, 'zplane ze: {} po: {}'.format(len(t.zd), len(t.pd)))
 
-def partial_clear(t):
-    if hasattr(t, 'rd'):
-        t.pop('rd')
-        t.pop('pd')
-        t.pop('cd')
-
 def partial_init(t):
     if hasattr(t, 'iirf_gain') and not hasattr(t, 'rd'):
         rd, pd, cd = t.iirf.iirfilter.rp_discrete
@@ -970,13 +979,6 @@ def tf_partial_generation(t):
         t.tf_partial[fidx] = t.cd
         for idx, rd in enumerate(t.rd):
             t.tf_partial[fidx] += rd / (zc - t.pd[idx])
-
-def tf_partial_clear(t):
-    if hasattr(t, 'tf_partial'):
-        partial_clear(t)
-        t.pop('tf_partial')
-        t.pop('plot_partial_dbs')
-        t.pop('plot_partial_phases')
 
 def tf_partial_init(t):
     if not hasattr(t, 'tf_partial'):
@@ -1164,9 +1166,6 @@ def generate_coefficients(t):
     if not hasattr(t, coef_raw):
         t.run(['partial_init', 'rp2coefficients', 'minimize_delay', 'extend_to_loops', 'finiteprecision'])
 
-def fpga_coef_trad_clear(t):
-    tf_coef_trad_raw_clear(t)
-
 def fpga_coef_trad_init(t):
     t.set('coef_idx', 1)
     t.set('coef_type', 'trad')
@@ -1174,19 +1173,12 @@ def fpga_coef_trad_init(t):
     generate_coefficients(t)
     generate_fpga_coefficients(t)
 
-def fpga_coef_comp_clear(t):
-    tf_coef_comp_raw_clear(t)
-
 def fpga_coef_comp_init(t):
     t.set('coef_idx', 0)
     t.set('coef_type', 'comp')
     t.set('coef_format', 'comp')
     generate_coefficients(t)
     generate_fpga_coefficients(t)
-
-def fpga_coef_clear(t):
-    fpga_coef_trad_clear(t)
-    fpga_coef_comp_clear(t)
 
 def fpga_coef_init(t):
     fpga_coef_trad_init(t)
@@ -1222,22 +1214,6 @@ def tf_coef_comp_raw_generation(t):
     t.set('coef_format', 'comp_raw')
     tf_coef_generation(t)
 
-def tf_coef_clear(t):
-    if hasattr(t, 'coef_{}_raw'.format(t.coef_type)):
-        partial_clear(t)
-        t.pop('coef_{}_raw'.format(t.coef_type))
-        t.pop('coef_{}'.format(t.coef_type))
-        t.pop('fpga_coef_{}'.format(t.coef_type))
-        t.pop('tf_coef_{}_raw'.format(t.coef_type))
-        t.pop('tf_coef_{}'.format(t.coef_type))
-        # t.pop('tf_final_{}'.format(t.coef_type))
-        t.pop('plot_coef_{}_raw_dbs'.format(t.coef_type))
-        t.pop('plot_coef_{}_raw_phases'.format(t.coef_type))
-        t.pop('plot_coef_{}_dbs'.format(t.coef_type))
-        t.pop('plot_coef_{}_phases'.format(t.coef_type))
-        t.pop('plot_final_{}_dbs'.format(t.coef_type))
-        t.pop('plot_final_{}_phases'.format(t.coef_type))
-
 def tf_coef_init(t):
     # generate the transfer function from the z-plane poles and zeros
     tf_coef_generation(t)
@@ -1248,21 +1224,11 @@ def tf_coef_init(t):
     t.set('plot_coef_{}_phases'.format(t.coef_format),
           np.angle(t.get('tf_coef_{}'.format(t.coef_format)), deg = True))
 
-def tf_coef_trad_raw_clear(t):
-    t.set('coef_idx', 1)
-    t.set('coef_type', 'trad')
-    tf_coef_clear(t)
-
 def tf_coef_trad_raw_init(t):
     t.set('coef_idx', 1)
     t.set('coef_type', 'trad')
     t.set('coef_format', 'trad_raw')
     tf_coef_init(t)
-
-def tf_coef_trad_clear(t):
-    t.set('coef_idx', 1)
-    t.set('coef_type', 'trad')
-    tf_coef_clear(t)
 
 def tf_coef_trad_init(t):
     t.set('coef_idx', 1)
@@ -1270,30 +1236,17 @@ def tf_coef_trad_init(t):
     t.set('coef_format', 'trad')
     tf_coef_init(t)
 
-def tf_coef_comp_raw_clear(t):
-    t.set('coef_idx', 0)
-    t.set('coef_type', 'comp')
-    tf_coef_clear(t)
-
 def tf_coef_comp_raw_init(t):
     t.set('coef_idx', 0)
     t.set('coef_type', 'comp')
     t.set('coef_format', 'comp_raw')
     tf_coef_init(t)
 
-def tf_coef_comp_clear(t):
-    t.set('coef_idx', 0)
-    t.set('coef_type', 'comp')
-    tf_coef_clear(t)
-
 def tf_coef_comp_init(t):
     t.set('coef_idx', 0)
     t.set('coef_type', 'comp')
     t.set('coef_format', 'comp')
     tf_coef_init(t)
-
-def tf_final_clear(t):
-    tf_coef_clear(t)
 
 def tf_final_init(t):
     generate_coefficients(t)
@@ -1307,21 +1260,12 @@ def tf_final_init(t):
     t.set('plot_final_{}_phases'.format(t.coef_type),
           np.angle(tf_final, deg = True))
 
-def tf_final_trad_clear(t):
-    t.set('coef_idx', 0)
-    t.set('coef_type', 'trad')
-    tf_final_clear(t)
 
 def tf_final_trad_init(t):
     t.set('coef_idx', 0)
     t.set('coef_type', 'trad')
     t.set('coef_format', 'trad')
     tf_final_init(t)
-
-def tf_final_comp_clear(t):
-    t.set('coef_idx', 0)
-    t.set('coef_type', 'comp')
-    tf_final_clear(t)
 
 def tf_final_comp_init(t):
     t.set('coef_idx', 0)
@@ -1343,12 +1287,6 @@ def tf_pz_generation(t):
 
             t.tf_pz[fidx] /= zc - po
 
-def tf_pz_clear(t):
-    if hasattr(t, 'tf_pz'):
-        t.pop('tf_pz')
-        t.pop('plot_pz_dbs')
-        t.pop('plot_pz_phases')
-
 def tf_pz_init(t):
     if not hasattr(t, 'tf_pz'):
         # generate the transfer function from the z-plane poles and zeros
@@ -1357,12 +1295,6 @@ def tf_pz_init(t):
     tf_abs = np.abs(t.tf_pz)
     t.set('plot_pz_dbs', 20 * np.log10(tf_abs))
     t.set('plot_pz_phases', np.angle(t.tf_pz, deg = True))
-
-def tf_desgn_clear(t):
-    if hasattr(t, 'designdata'):
-        t.pop('designdata')
-        t.pop('plot_desgn_dbs')
-        t.pop('plot_desgn_phases')
 
 def tf_desgn_init(t):
     t.set('designdata', t.iirf.transfer_function(t.frequencies))
@@ -1377,11 +1309,6 @@ def characterise_transfer_function(data, frequencies, condition):
 
     return fminidx_lo, fminidx_hi
 
-def tf_meas_clear(t):
-    if hasattr(t, 'plot_meas_phases'):
-        t.pop('plot_meas_phases')
-        t.pop('plot_meas_dbs')
-
 def tf_meas_init(t):
     if not hasattr(t, 'tf_measurement'):
         t.set('tf_measurement', MeasureTransferFunction(t, t.tf))
@@ -1389,18 +1316,11 @@ def tf_meas_init(t):
     t.set('plot_meas_phases', t.tf_measurement.phases)
     t.set('plot_meas_dbs', t.tf_measurement.dbs)
 
-def tf_characterisation_clear(t):
-    t.pop('tf_measurement')
-
 def tf_characterisation_init(t):
     if not hasattr(t, 'tf_measurement'):
         t.set('tf_measurement', MeasureTransferFunction(t, t.tf))
 
     t.tf_measurement.peak_gain()
-
-def tf_dbs_clear(t):
-    for item in t.tf_items:
-        t.run(['tf_{}_clear'.format(item)])
 
 def tf_dbs_init(t):
     for item in t.tf_items:
@@ -1422,10 +1342,6 @@ def plot_tf_dbs(t):
 
     labels.append('db')
     plt_freq_response(t, to_plot, 'frequency response', labels)
-
-def tf_phases_clear(t):
-    for item in t.tf_items:
-        t.run(['tf_{}_clear'.format(item)])
 
 def tf_phases_init(t):
     for item in t.tf_items:
@@ -1810,12 +1726,7 @@ def get_run_conf(**kargs):
 def test_sequence(t):
     for t.iter_count in range(t.test_vectors.shape[0]):
         # clear old results
-        if hasattr(t, 'iirf_gain'): t.pop('iirf_gain')
-        tf_characterisation_clear(t)
-        for item in t.plot_items:
-            t.run(['{}_clear'.format(item)])
-
-        if DEBUG: logmsg(t, [i for i in t.dump()], title = 'after clear')
+        t.cleartolevel()
 
         loops_samples = round(125e6 / t.test_vectors[t.iter_count, t.fc_idx])
         samples = loops_samples / t.test.loops
@@ -1855,6 +1766,7 @@ def test_sequence(t):
         if hasattr(t, 'iter_count'):
             # save calibration result - t.fc_idx, t.gain_adjust_idx
             t.getcreate('results', np.empty((0, 2), dtype = float))
+            t.keepattrinlevel('results')
 
             result = np.array([[t.fc, t.tf_measurement.gain_adjust_correction]], dtype = float)
             t.results = np.concatenate((t.results, result))
