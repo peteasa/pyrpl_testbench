@@ -1280,7 +1280,7 @@ def tf_final_init(t):
 
 def tf_final_trad_init(t):
     if not hasattr(t, 'tf_final_trad_mtfn'):
-        t.set('coef_idx', 0)
+        t.set('coef_idx', 1)
         t.set('coef_type', 'trad')
         t.set('coef_format', 'trad')
         tf_final_init(t)
