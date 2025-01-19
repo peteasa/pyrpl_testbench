@@ -991,10 +991,11 @@ def z_plane_pz_init(t):
         # Expose internals zd to test harness
         zd = np.exp(np.asarray(z, dtype=np.complex128) * t.dt * t.loops)
         pd = np.exp(np.asarray(p, dtype=np.complex128) * t.dt * t.loops)
-        # Improve stability: add zeros at s = \infty fix up IirFilter.coefficients
-        # applying the following and uncomment the following
-        #while len(zd) < len(pd):
-        #    zd = np.append(zd, complex(-1, 0))
+        if False: #t.test.biproper:
+            # Improve stability: add zeros at s = \infty
+            # requires equivalent change in IirFilter.coefficients
+            while len(zd) < len(pd):
+                zd = np.append(zd, complex(-1, 0))
 
         t.set('zd', zd)
         if hasattr(t, 'pd') and not np.array_equal(t.pd, pd):
@@ -1646,6 +1647,7 @@ def iirf_setup(t):
         try:
             t.iirf.setup(gain=t.iirf_gain,
                          poles=poles, zeros=zeros,
+                         biproper=t.test.biproper,
                          loops=t.test.loops,
                          output_direct = 'off')
             break
@@ -1655,11 +1657,13 @@ def iirf_setup(t):
         try_attrib(t.iirf,
                    gain = t.iirf_gain,
                    zeros = zeros,
-                   poles = poles)
+                   poles = poles,
+                   biproper = t.test.biproper)
 
         log_msg(t, 'last attempt to setup iir')
         t.iirf.setup(gain=t.iirf_gain,
                      poles=poles, zeros=zeros,
+                     biproper=t.test.biproper,
                      loops=t.test.loops,
                      output_direct = 'off')
 
@@ -1795,6 +1799,9 @@ def get_run_conf(**kargs):
     test.getcreate('loops', default = 4)
     test.getcreate('fc', 8e4)
 
+    # setting the following to True requires changes in IirFilter.coefficients
+    test.getcreate('biproper', False)
+
     if hasattr(test, 'butter_lp') and test.butter_lp:
         test.getcreate('butterworth_order', default = 3)
     else: test.pop('butterworth_order')
@@ -1864,7 +1871,7 @@ if __name__ == '__main__':
     iirf_init(t)
     network_analyser_init(t)
     t.set('tf_measure_items', ['desgn', 'meas', 'final_comp', 'final_trad'])
-    # tf_items are: 'pz', 'partial', 'coef_comp', 'final_comp', 
+    # tf_items are: 'pz', 'partial', 'coef_comp', 'final_comp',
     #               'coef_trad', 'final_trad'
     t.set('tf_items', ['desgn', 'meas', 'coef_comp'])
     # other possible items to plot include: 's_plane_pz'
