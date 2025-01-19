@@ -507,10 +507,41 @@ class MeasureTransferFunction(Meta):
 
         self.set('phases', np.angle(self.tf, deg = True))
         self.set('tf_abs', np.abs(self.tf))
-        self.set('tf_max', self.tf_abs.max())
-        self.set('amaxidx', np.argmax(self.tf_abs))
+
+        dbs_minidx = np.argmin(self.tf_abs.min())
+        self.set('tf_min', dbs_minidx)
+        self.set('aminidx', dbs_minidx)
+        dbs_maxidx = np.argmax(self.tf_abs.max())
+        self.set('amaxidx', dbs_maxidx)
+
+        zones = []
+        # example: stable     max peak
+        # zones = [(0, 600), (875, self.tf_abs.shape[0])]
+        for zidx, (z_min, z_max) in enumerate(zones):
+            tf_zmin = self.tf_abs[z_min:z_max].min()
+            zminidx = z_min + np.argmin(self.tf_abs[z_min:z_max])
+            tf_zmax = self.tf_abs[z_min:z_max].max()
+            zmaxidx = z_min + np.argmax(self.tf_abs[z_min:z_max])
+
+            if zidx == 0:
+                dbs_maxidx = zmaxidx
+            if zidx == 1:
+                self.set('tf_max', tf_zmax)
+                self.set('amaxidx', zmaxidx)
+
+            msg = 'zone: {}->{} tf_zmin: {:0.3e} @ {} @ {:0.0f} tf_zmax: {:0.3e} @ {} @ {:0.0f}'.format(
+                z_min, z_max, tf_zmin, zminidx, self.frequencies[zminidx], tf_zmax, zmaxidx, self.frequencies[zmaxidx])
+            log_msg(self, msg)
+
+        if 0 < len(zones):
+            msg = 'tf_min: {:0.3e} @ {} @ {:0.0f} tf_max: {:0.3e} @ {} @ {:0.0f}'.format(
+                self.tf_min, dbs_minidx, self.frequencies[dbs_minidx],
+                self.tf_max, dbs_maxidx, self.frequencies[dbs_maxidx])
+            log_msg(self, msg)
+
         self.set('dbs', 20 * np.log10(self.tf_abs))
-        self.set('dbs_max', self.dbs.max())
+        self.set('tf_max', self.tf_abs[dbs_maxidx])
+        self.set('dbs_max', self.dbs[dbs_maxidx])
 
         self.set('gain', t.iirf_gain if hasattr(t, 'iirf_gain') else 1.0)
         self.set('gain_adjust', t.gain_adjust if hasattr(t, 'gain_adjust') else 1.0)
@@ -873,6 +904,11 @@ def log_extended(t):
     if hasattr(t, 'zd'):
         log_msg(t, 'rescaled_sys k: {}'.format(t.k))
         log_zp(t, t.zd, t.pd, 'z-plane zeros and poles')
+
+    log_msg(t, 'iir inputfilter: {} iir _delay: {}'.format(t.iirf.inputfilter, t.iirf._delay))
+    if (not t.iirf.inputfilter == t.iirf.iirfilter.inputfilter) or (not t.iirf._delay == t.iirf.iirfilter.moduledelay):
+        log_msg(t, 'iir theory inputfilter: {} iir theory moduledelay: {}'.format(
+            t.iirf.iirfilter.inputfilter, t.iirf.iirfilter.moduledelay))
 
     if not hasattr(t, 'rd'):
         partial_init(t)
@@ -1271,7 +1307,6 @@ def tf_final_init(t):
         frequencies = t.frequencies,
         coefficients = t.get('coef_{}'.format(t.coef_type)),
         delay = True) * t.iirf.iirfilter.tf_inputfilter(frequencies = t.frequencies)
-
     tf_mtfn = 'tf_final_{}_mtfn'.format(t.coef_type)
     t.set(tf_mtfn,
           MeasureTransferFunction(t, tf_final, '{} coefficients'.format(t.coef_type)))
@@ -1602,8 +1637,8 @@ def try_attrib(module, **kargs):
 
 def iirf_setup(t):
     t.set('iirf_gain', t.gain / t.gain_adjust)
-    zeros=t.fc * t.zeros
-    poles=t.fc * t.poles
+    zeros = t.fc * t.zeros
+    poles = t.fc * t.poles
 
     # print('iirf_setup poles: {} zeros: {} iirf_gain: {}'.format(t.poles, t.zeros, t.iirf_gain))
     for i in range(1):
@@ -1829,8 +1864,9 @@ if __name__ == '__main__':
     iirf_init(t)
     network_analyser_init(t)
     t.set('tf_measure_items', ['desgn', 'meas', 'final_comp', 'final_trad'])
-    # other possible tf_items are: 'pz', 'partial', 'final_comp', 'coef_trad'
-    t.set('tf_items', ['desgn', 'meas', 'coef_comp', 'final_trad'])
+    # tf_items are: 'pz', 'partial', 'coef_comp', 'final_comp', 
+    #               'coef_trad', 'final_trad'
+    t.set('tf_items', ['desgn', 'meas', 'coef_comp'])
     # other possible items to plot include: 's_plane_pz'
     t.set('plot_items', ['s_plane_proper', 'z_plane_pz', 'tf_dbs', 'tf_phases'])
     t.set('plot_sizes', {'s_plane': {'ncols': 1}, 'z_plane': {'ncols': 1}, 'tf': {'nrows': 1}})
