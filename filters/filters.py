@@ -496,11 +496,16 @@ class MeasureTransferFunction(Meta):
         self.set('tf', tf)
         self.set('title', 'Measurements from {}'.format(title))
         self.set('frequencies', t.frequencies)
+        fstable = self.frequencies[0] if t.fstablemin < self.frequencies[0] else t.fstablemin
+        fstable = fstable if fstable < self.frequencies[-2] else self.frequencies[-2]
+        self.fstableminidx = f_idx(self.frequencies, fstable)
+        fstable = self.frequencies[-1] if self.frequencies[-1] < t.fstablemax else t.fstablemax
+        self.fstablemaxidx = f_idx(self.frequencies, fstable)
 
         ttype = gen_test_type(t.test)
         self.set('highpass', True if ttype == 'highpass' else False)
         self.set('lowpass',  True if ttype == 'lowpass' else False)
-        self.set('lowpass',  True if ttype == 'butter_lp' else False)
+        self.set('lowpass',  True if ttype == 'butter_lp' else self.lowpass)
         self.set('bandpass', True if ttype == 'bandpass' else False)
         self.set('notch', True if ttype == 'notch' else False)
         self.set('resonance', True if ttype == 'resonance' else False)
@@ -508,39 +513,14 @@ class MeasureTransferFunction(Meta):
         self.set('phases', np.angle(self.tf, deg = True))
         self.set('tf_abs', np.abs(self.tf))
 
-        dbs_minidx = np.argmin(self.tf_abs.min())
-        self.set('tf_min', dbs_minidx)
+        dbs_minidx = self.fstableminidx + np.argmin(self.tf_abs[self.fstableminidx:self.fstablemaxidx])
         self.set('aminidx', dbs_minidx)
-        dbs_maxidx = np.argmax(self.tf_abs.max())
+        self.set('tf_min', self.tf_abs[dbs_minidx])
+        dbs_maxidx = self.fstableminidx + np.argmax(self.tf_abs[self.fstableminidx:self.fstablemaxidx])
         self.set('amaxidx', dbs_maxidx)
-
-        zones = []
-        # example: stable     max peak
-        # zones = [(0, 600), (875, self.tf_abs.shape[0])]
-        for zidx, (z_min, z_max) in enumerate(zones):
-            tf_zmin = self.tf_abs[z_min:z_max].min()
-            zminidx = z_min + np.argmin(self.tf_abs[z_min:z_max])
-            tf_zmax = self.tf_abs[z_min:z_max].max()
-            zmaxidx = z_min + np.argmax(self.tf_abs[z_min:z_max])
-
-            if zidx == 0:
-                dbs_maxidx = zmaxidx
-            if zidx == 1:
-                self.set('tf_max', tf_zmax)
-                self.set('amaxidx', zmaxidx)
-
-            msg = 'zone: {}->{} tf_zmin: {:0.3e} @ {} @ {:0.0f} tf_zmax: {:0.3e} @ {} @ {:0.0f}'.format(
-                z_min, z_max, tf_zmin, zminidx, self.frequencies[zminidx], tf_zmax, zmaxidx, self.frequencies[zmaxidx])
-            log_msg(self, msg)
-
-        if 0 < len(zones):
-            msg = 'tf_min: {:0.3e} @ {} @ {:0.0f} tf_max: {:0.3e} @ {} @ {:0.0f}'.format(
-                self.tf_min, dbs_minidx, self.frequencies[dbs_minidx],
-                self.tf_max, dbs_maxidx, self.frequencies[dbs_maxidx])
-            log_msg(self, msg)
+        self.set('tf_max', self.tf_abs[dbs_maxidx])
 
         self.set('dbs', 20 * np.log10(self.tf_abs))
-        self.set('tf_max', self.tf_abs[dbs_maxidx])
         self.set('dbs_max', self.dbs[dbs_maxidx])
 
         self.set('gain', t.iirf_gain if hasattr(t, 'iirf_gain') else 1.0)
@@ -548,10 +528,53 @@ class MeasureTransferFunction(Meta):
 
         self.set('gain_adjust_correction', gain_adjust_correction(t, self.gain_adjust, self.tf_max))
 
+        self.set('f', 0)
+
         super().__init__()
 
+    def measure_multi_zone(self, zones = [], dbs_min_zone = 0, dbs_max_zone = 0, aminidx_zone = 0, amaxidx_zone = 0):
+        dbs_minidx = np.argmin(self.tf_abs.min())
+        dbs_maxidx = np.argmax(self.tf_abs.max())
+
+        #          unstable  stable      high pass   low pass
+        # zones = [(0, 550), (550, 560), (600, 800), (875, self.tf_abs.shape[0])]
+        for fidx, (fmin, fmax) in enumerate(zones):
+            z_fmin = f_idx(self.frequencies, fmin)
+            z_fmax = f_idx(self.frequencies, fmax)
+            z_fmax = z_fmax if z_fmin < z_fmax else z_fmin + 1
+            tf_zfmin = self.tf_abs[z_fmin:z_fmax].min()
+            zfminidx = z_fmin + np.argmin(self.tf_abs[z_fmin:z_fmax])
+            tf_zfmax = self.tf_abs[z_fmin:z_fmax].max()
+            zfmaxidx = z_fmin + np.argmax(self.tf_abs[z_fmin:z_fmax])
+
+            if fidx == aminidx_zone:
+                self.set('aminidx', zfminidx)
+            if fidx == amaxidx_zone:
+                self.set('amaxidx', zfmaxidx)
+            if fidx == dbs_min_zone:
+                dbs_minidx = zfminidx
+            if fidx == dbs_max_zone:
+                dbs_maxidx = zfmaxidx
+
+            msg = 'zone: {}->{} tf_zfmin: {:0.3e} @ {} @ {:0.0f} tf_zfmax: {:0.3e} @ {} @ {:0.0f}'.format(
+                z_fmin, z_fmax,
+                tf_zfmin, zfminidx, self.frequencies[zfminidx],
+                tf_zfmax, zfmaxidx, self.frequencies[zfmaxidx])
+            log_msg(self, msg)
+
+        if 0 < len(zones):
+            self.set('tf_min', self.tf_abs[dbs_minidx])
+            self.set('dbs_min', self.dbs[dbs_minidx])
+            self.set('tf_max', self.tf_abs[dbs_maxidx])
+            self.set('dbs_max', self.dbs[dbs_maxidx])
+
+            msg = 'tf_min: {:0.3e} @ {} @ {:0.0f} tf_max: {:0.3e} @ {} @ {:0.0f}'.format(
+                self.tf_min, dbs_minidx, self.frequencies[dbs_minidx],
+                self.tf_max, dbs_maxidx, self.frequencies[dbs_maxidx])
+            log_msg(self, msg)
+
     def peak_gain(self):
-        msg = 'low pass calc from phase then from amplitude: gain: {:0.6e} tf_max: {:0.6f} updated gain_adjust: {:0.6e}'.format(
+        msg = 'calc from phase then from amplitude: gain: {:0.6e} tf_max: {:0.6f} updated gain_adjust: {:0.6e}'.format(
             self.gain,
             self.tf_max,
             self.gain_adjust_correction)
@@ -561,31 +584,54 @@ class MeasureTransferFunction(Meta):
         self.gain_from_amplitude()
 
     def gain_from_phase(self):
-        if self.lowpass:
-            if self.highpass:
-                msg = 'peak at: {:0.0f}'.format(self.frequencies[self.amaxidx])
+        if self.lowpass or self.bandpass or self.resonance:
+            if self.bandpass or self.resonance:
+                msg = 'peak of: {:0.3f} @ {:0.0f} phase: {:0.3f}'.format(
+                    self.dbs[self.amaxidx], self.frequencies[self.amaxidx], self.phases[self.amaxidx])
                 log_msg(self, msg)
 
             self.lp_gain_from_phase()
 
-        if self.highpass:
+        if self.highpass or self.bandpass or self.resonance:
             self.hp_gain_from_phase()
 
     def gain_from_amplitude(self):
-        if self.lowpass:
-            self.lp_gain_from_amplitude()
+        if self.lowpass or self.bandpass or self.resonance:
+            if self.bandpass or self.resonance:
+                msg = 'peak of: {:0.3f} @ {:0.0f} phase: {:0.3f}'.format(
+                    self.dbs[self.amaxidx], self.frequencies[self.amaxidx], self.phases[self.amaxidx])
+                log_msg(self, msg)
 
-        if self.highpass:
+            self.lp_gain_from_amplitude()
+            flp = self.f
+
+        if self.highpass or self.bandpass or self.resonance:
             self.hp_gain_from_amplitude()
+            fhp = self.f
+
+        if self.bandpass or self.resonance:
+            try:
+                self.f = self.frequencies[self.amaxidx]
+                self.set('fwidth', flp - fhp)
+                msg = 'peak @ {:0.0f} width: {:0.0f}'.format(
+                    self.f, self.fwidth)
+                log_msg(self, msg)
+            except:
+                pass
+
+        if self.notch:
+            self.notch_gain_from_amplitude()
 
     def lp_gain_from_phase(self):
-        phases_lp = self.phases[self.amaxidx:] if self.highpass else self.phases
-        frequencies = self.frequencies[self.amaxidx:] if self.highpass else self.frequencies
-        amaxidx = self.amaxidx if self.highpass else 0
+        highpass = True if 45 < self.phases[self.fstableminidx] else False
+        target_phase = -45
+        idx_offset = self.amaxidx if highpass else self.fstableminidx
+        phases_lp = self.phases[idx_offset:]
+        frequencies = self.frequencies[idx_offset:]
         try:
-            fminpidx, fmaxpidx = characterise_transfer_function(phases_lp, frequencies, phases_lp < phases_lp[0] - 45)
-            self.set('lp_fminpidx', amaxidx + fminpidx)
-            self.set('lp_fmaxpidx', amaxidx + fmaxpidx)
+            fminpidx, fmaxpidx = characterise_transfer_function(phases_lp, frequencies, phases_lp < target_phase)
+            self.set('lp_fminpidx', idx_offset + fminpidx)
+            self.set('lp_fmaxpidx', idx_offset + fmaxpidx)
             msg = 'p:f between: {:0.0f} and {:0.0f} dbs: {:0.3f} and {:0.3f} phase: {:0.3f} and {:0.3f}'.format(
                 self.frequencies[self.lp_fminpidx], self.frequencies[self.lp_fmaxpidx],
                 self.dbs[self.lp_fminpidx], self.dbs[self.lp_fmaxpidx],
@@ -595,13 +641,15 @@ class MeasureTransferFunction(Meta):
             pass
 
     def lp_gain_from_amplitude(self):
-        dbs_lp = self.dbs[self.amaxidx:] if self.highpass else self.dbs
-        frequencies = self.frequencies[self.amaxidx:] if self.highpass else self.frequencies
-        amaxidx = self.amaxidx if self.highpass else 0
+        highpass = True if 45 < self.phases[self.fstableminidx] else False
+        idx_offset = self.amaxidx if highpass else self.fstableminidx
+        dbs_lp = self.dbs[idx_offset:]
+        frequencies = self.frequencies[idx_offset:]
         try:
             fmindidx, fmaxdidx = characterise_transfer_function(dbs_lp, self.frequencies, dbs_lp < self.dbs_max - 3)
-            self.set('lp_fmindidx', amaxidx + fmindidx)
-            self.set('lp_fmaxdidx', amaxidx + fmaxdidx)
+            self.set('lp_fmindidx', idx_offset + fmindidx)
+            self.set('lp_fmaxdidx', idx_offset + fmaxdidx)
+            self.f = self.frequencies[self.lp_fmaxdidx]
             msg = 'a:f between: {:0.0f} and {:0.0f} dbs: {:0.3f} and {:0.3f} phase: {:0.3f} and {:0.3f}'.format(
                 self.frequencies[self.lp_fmindidx], self.frequencies[self.lp_fmaxdidx],
                 self.dbs[self.lp_fmindidx], self.dbs[self.lp_fmaxdidx],
@@ -611,10 +659,14 @@ class MeasureTransferFunction(Meta):
             pass
 
     def hp_gain_from_phase(self):
+        target_phase = 45
+        idx_offset = self.fstableminidx
+        phases_hp = self.phases[idx_offset:]
+        frequencies = self.frequencies[idx_offset:]
         try:
-            fminpidx, fmaxpidx = characterise_transfer_function(self.phases, self.frequencies, self.phases < self.phases[0] - 45)
-            self.set('hp_fminpidx', fminpidx)
-            self.set('hp_fmaxpidx', fmaxpidx)
+            fminpidx, fmaxpidx = characterise_transfer_function(phases_hp, frequencies, phases_hp < target_phase)
+            self.set('hp_fminpidx', idx_offset + fminpidx)
+            self.set('hp_fmaxpidx', idx_offset + fmaxpidx)
             msg = 'p:f between: {:0.0f} and {:0.0f} dbs: {:0.3f} and {:0.3f} phase: {:0.3f} and {:0.3f}'.format(
                 self.frequencies[self.hp_fminpidx], self.frequencies[self.hp_fmaxpidx],
                 self.dbs[self.hp_fminpidx], self.dbs[self.hp_fmaxpidx],
@@ -628,6 +680,7 @@ class MeasureTransferFunction(Meta):
             fmindidx, fmaxdidx = characterise_transfer_function(self.dbs, self.frequencies, self.dbs_max - 3 < self.dbs)
             self.set('hp_fmindidx', fmindidx)
             self.set('hp_fmaxdidx', fmaxdidx)
+            self.f = self.frequencies[self.hp_fmaxdidx]
             msg = 'a:f between: {:0.0f} and {:0.0f} dbs: {:0.3f} and {:0.3f} phase: {:0.3f} and {:0.3f}'.format(
                 self.frequencies[self.hp_fmindidx], self.frequencies[self.hp_fmaxdidx],
                 self.dbs[self.hp_fmindidx], self.dbs[self.hp_fmaxdidx],
@@ -635,6 +688,12 @@ class MeasureTransferFunction(Meta):
             log_msg(self, msg)
         except ValueError:
             pass
+
+    def notch_gain_from_amplitude(self):
+        self.f = self.frequencies[self.aminidx]
+        msg = 'notch @ {:0.0f} dbs: {:0.3f} phase: {:0.3f} '.format(
+            self.f, self.dbs[self.aminidx], self.phases[self.aminidx])
+        log_msg(self, msg)
 
 def start_logging(t):
     from pathlib import Path
@@ -948,6 +1007,19 @@ def omegac_cos(omegac, angle, delta = 0):
         val = 0
 
     return val
+
+def guess_stable_min_zone(t):
+    return 1.4e5 if 1e6 < t.fc else t.fc / 10
+
+def guess_stable_max_zone(t):
+    return 0.8 * 125e6 / t.test.loops
+
+def f_idx(frequencies, frequency):
+    idxs = np.nonzero(frequency < frequencies)
+    f_idx = idxs[0][0] if 0 < len(idxs) and 0 < idxs[0].shape[0] else frequencies.shape[0] - 1
+    f_idx = f_idx if 0 < f_idx else 0
+
+    return f_idx
 
 def generate_f(start, stop, count):
     return np.logspace(
@@ -1489,6 +1561,8 @@ def configure_gain(t):
     samples = loops_samples / t.test.loops
 
     t.getcreate('fc', 125e6 / (t.test.loops * samples))
+    t.getcreate('fstablemin', guess_stable_min_zone(t))
+    t.getcreate('fstablemax', guess_stable_max_zone(t))
     t.getcreate('omegac', 2 * np.pi * t.fc)
     t.getcreate('gain', t.test.gain)
 
@@ -1819,6 +1893,8 @@ def test_sequence(t):
         samples = loops_samples / t.test.loops
 
         t.set('fc', 125e6 / (t.test.loops * samples))
+        t.set('fstablemin', guess_stable_min_zone(t))
+        t.set('fstablemax', guess_stable_max_zone(t))
         t.set('omegac', 2 * np.pi * t.fc)
 
         generate_poles_zeros(t)
@@ -1851,11 +1927,13 @@ def test_sequence(t):
         tf_measure_init(t)
 
         if hasattr(t, 'iter_count'):
-            # save calibration result - t.fc_idx, t.gain_adjust_idx
-            t.getcreate('results', np.empty((0, 2), dtype = float))
+            # save calibration result - t.fc_idx, t.gain_adjust_idx, t.measured_fc
+            t.getcreate('results', np.empty((0, 3), dtype = float))
             t.keepattrinlevel('results')
 
-            result = np.array([[t.fc, t.tf_meas_mtfn.gain_adjust_correction]], dtype = float)
+            result = np.array([[t.fc,
+                                t.tf_meas_mtfn.gain_adjust_correction,
+                                t.tf_meas_mtfn.f]], dtype = float)
             t.results = np.concatenate((t.results, result))
 
         if hasattr(t.test, 'plot') and t.test.plot and hasattr(t, 'iter_count') and t.iter_count % 5 == 0:
@@ -1870,7 +1948,8 @@ if __name__ == '__main__':
 
     iirf_init(t)
     network_analyser_init(t)
-    t.set('tf_measure_items', ['desgn', 'meas', 'final_comp', 'final_trad'])
+    # 'desgn', 'meas', 'final_comp', 'final_trad'
+    t.set('tf_measure_items', ['meas'])
     # tf_items are: 'pz', 'partial', 'coef_comp', 'final_comp',
     #               'coef_trad', 'final_trad'
     t.set('tf_items', ['desgn', 'meas', 'coef_comp'])
@@ -1887,6 +1966,28 @@ if __name__ == '__main__':
     # t.run(['configure_gain', 'generate_poles_zeros', 'iirf_setup', 'log_basics', 'run_test', 'tf_measure_init', 'fpga_coef_init', 'plot_results', 'log_extended'])
     # run sequence
     t.run(['get_create_gain_adjust', 'test_sequence'])
+
+    if hasattr(t, 'results') and 2 < t.results.shape[1]:
+        # plot the data
+        if hasattr(t, 'svg') and t.svg:
+            import matplotlib
+            matplotlib.use('Agg')
+
+        import matplotlib.pyplot as plt
+        fig = plt.figure()
+        plt.plot(t.results[:,2], t.results[:,t.fc_idx], label = gen_test_type(t.test))
+        plt.grid(True, color='0.9', linestyle='-', which='both', axis='both')
+
+        plt.xlabel('measured frequency [Hz]');
+        plt.ylabel('designed frequency [Hz]');
+
+        plt.legend(loc = 'center left', bbox_to_anchor = (1.04, 0.5))
+        plt.title(gen_test_type(t.test))
+        plt.tight_layout()
+        if hasattr(t, 'svg') and t.svg:
+            plt.savefig('{}_frequencies.svg'.format(t.test.filename))
+        else:
+            plt.show()
 
     # finish saving test results
     log_msg(t, '========= END TEST ============')
