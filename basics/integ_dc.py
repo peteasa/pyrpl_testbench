@@ -17,7 +17,7 @@ def prepare_to_show_plot(p):
 if __name__ == '__main__':
     HOSTNAME = 'rp-f0bd75'
     CONFIG = 'basic.pid_dc'
-    p = pyrpl.Pyrpl(config=CONFIG, hostname=HOSTNAME, gui=False)
+    p = pyrpl.Pyrpl(config = CONFIG, hostname = HOSTNAME, gui = False, reloadfpga = True) # False)
     r = p.rp
     s = r.scope
 

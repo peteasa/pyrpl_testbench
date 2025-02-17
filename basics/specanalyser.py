@@ -194,7 +194,7 @@ def characterise_spectrum(data, frequencies, condition):
 if __name__ == '__main__':
     HOSTNAME = 'rp-f0bd75'
     CONFIG = 'basic.specanalyser'
-    p = pyrpl.Pyrpl(config = CONFIG, hostname = HOSTNAME, gui = False)
+    p = pyrpl.Pyrpl(config = CONFIG, hostname = HOSTNAME, gui = False, reloadfpga = True) # False)
 
     dataname = 'data'
     c = CalData()

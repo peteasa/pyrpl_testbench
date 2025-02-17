@@ -13,7 +13,7 @@ def characterise_transfer_function(data, frequencies, condition):
 if __name__ == '__main__':
     HOSTNAME = 'rp-f0bd75'
     CONFIG = 'basic.filters'
-    p = pyrpl.Pyrpl(config = CONFIG, hostname = HOSTNAME, gui = False)
+    p = pyrpl.Pyrpl(config = CONFIG, hostname = HOSTNAME, gui = False, reloadfpga = True) # False)
     na = p.networkanalyzer
 
     with p.iirs.pop('user') as iir:

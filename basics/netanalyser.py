@@ -18,7 +18,7 @@ def prepare_to_show_plot(p):
 if __name__ == '__main__':
     HOSTNAME = 'rp-f0bd75'
     CONFIG = 'basic.netanalyser'
-    p = pyrpl.Pyrpl(config=CONFIG, hostname=HOSTNAME, gui=False)
+    p = pyrpl.Pyrpl(config = CONFIG, hostname = HOSTNAME, gui = False, reloadfpga = True) # False)
 
     # network analyser is a software module so is accessed directly from pyrpl
     na = p.networkanalyzer
@@ -75,4 +75,4 @@ if __name__ == '__main__':
         title = 'external'
         label2 = '{}->{}->{}->{}'.format(na.iq_name, na.output_direct, na.input, na.iq_name)
 
-    bodeplot([(f, iq2, label1), (f, in1*attenuation, label2)], title=title, xlog=True)
+    bodeplot([(f, iq2, label1), (f, in1*attenuation, label2)], xlog=True)
