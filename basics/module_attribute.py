@@ -8,7 +8,7 @@ from pyrpl.hardware_modules.asg import Asg0, Asg1
 if __name__ == '__main__':
     HOSTNAME = 'rp-f0bd75'
     CONFIG = 'basic.module_attribute'
-    p = pyrpl.Pyrpl(config='', hostname=HOSTNAME, gui=False)
+    p = pyrpl.Pyrpl(config = '', hostname = HOSTNAME, gui = False, reloadfpga = True) # False)
     r = p.rp
     s = r.scope
     asg = r.asg0
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     hysteresis = 0.01
 
     # s.trigger_delay would auto call_setup
-    trigger_delay = 0.0 # -0.016 # 0.079348
+    trigger_delay = 0.2
 
     # s.sampling_time would auto call_setup
     sampling_time = 1 / ( fg * requested_samples_per_cycle )
@@ -62,22 +62,31 @@ if __name__ == '__main__':
     samples_to_plot = int(acquire_length * samples_per_cycle)
 
     results = s.single_async()
-    if s.curve_ready():
-        discard = curve.result()
-        results = s.single_async()
-        sleep(0.001)
+    for i in range(2):
+        # wait for trigger to arm
+        arm_time = 4
+        trigger_prep = - s.trigger_delay if s.trigger_delay < 0 else 0
+        sleep(arm_time + trigger_prep)
 
-    print('Curve ready: {}'.format(s.curve_ready()))
+        # trigger should still be armed
+        if i == 0 and s.curve_ready():
+            discard = curve.result()
+            results = s.single_async()
+            continue
 
-    # similar to asg.trig()
-    for attempt in range(5):
-        if s.curve_ready():
-            break
+        break
 
-        asg.trigger_source = 'immediately'
-        sleep(1.0)
-        asg.trigger_source = 'off'
-        sleep(0.1)
+    print('Curve ready before generation: {}'.format(s.curve_ready()))
+
+    sequence_time = 1.0
+    asg.trigger_source = 'immediately'
+    sleep(sequence_time)
+    asg.trigger_source = 'off'
+
+    # wait for scope to finish
+    finish_time = s.trigger_delay + s.duration - sequence_time
+    if 0 < finish_time:
+        sleep(finish_time)
 
     print('After asg start: curve ready: {}'.format(s.curve_ready()))
     curve = results.result()

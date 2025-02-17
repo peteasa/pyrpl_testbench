@@ -17,27 +17,31 @@ def prepare_to_show_plot(p):
 if __name__ == '__main__':
     HOSTNAME = 'rp-f0bd75'
     CONFIG = 'basic.asg_burst'
-    p = pyrpl.Pyrpl(config=CONFIG, hostname=HOSTNAME, gui=False)
+    p = pyrpl.Pyrpl(config = CONFIG, hostname = HOSTNAME, gui = False, reloadfpga = True) # False)
     r = p.rp
     s = r.scope
 
     pid = r.pid0
     asg = r.asg0
 
-    asg.setup(waveform='dc', offset = 0, amplitude = 0, trigger_source = 'off', output_direct = 'off')
+    # configure the asg for dc / zero amplitude
+    asg.setup(waveform = 'dc', offset = 0, amplitude = 0, trigger_source = 'off', output_direct = 'off')
 
     # reset the integrator to zero, disable filters and switch off gains
     pid.setup(inputfilter = [0, 0, 0, 0], p = 0, i = 0)
 
+    # set input to asg0
+    pid.input = asg.name
+
+    # prepare to turn on integrator at some negative gain
+    pid_i = -2000.0
+
+    # set integral value above the maximum positive voltage
+    pid_reg_integral = 0.2 # -0.5
+
     # set scope ch1 to pid2
     s.input1 = pid.name
     s.input2 = asg.name
-
-    # turn on integrator to whatever negative gain
-    pid.i = -200.0
-
-    # set integral value above the maximum positive voltage
-    pid.reg_integral = 0.2 # -0.5
 
     start_phase = 45
     fg = 17000
@@ -94,6 +98,7 @@ if __name__ == '__main__':
     trigger_delay = cycles_to_delay * s.sampling_time * samples_per_cycle
     s.setup(trigger_source = trigger_source, trigger_delay = trigger_delay)
 
+    # Now setup asg
     asg.delay_between_bursts = 2000000 / fg
 
     # demonstrate ASG wrong number of bursts https://github.com/lneuhaus/pyrpl/issues/493
@@ -104,20 +109,23 @@ if __name__ == '__main__':
               trigger_source = 'off',
               waveform = waveform, cycles_per_burst = 3)
 
-    # setup the scope for an acquisition
+    # Prepare the scope for an acquisition
     results = s.single_async()
-    sleep(0.001)
+    for i in range(2):
+        # wait for trigger to arm
+        arm_time = 4
+        trigger_prep = - s.trigger_delay if s.trigger_delay < 0 else 0
+        sleep(arm_time + trigger_prep)
 
-    # trigger should still be armed
-    if s.curve_ready():
-        discard = curve.result()
-        results = s.single_async()
-        sleep(0.001)
+        # trigger should still be armed
+        if i == 0 and s.curve_ready():
+            discard = curve.result()
+            results = s.single_async()
+            continue
+
+        break
 
     print('Curve ready: {}'.format(s.curve_ready()))
-
-    # set input to asg1
-    pid.input = asg.name
 
     # start_phase causes an undesireable initial offset to be configured
     # during the setup phase two unwanted partial bursts occur followed by the configured bursts
@@ -125,15 +133,20 @@ if __name__ == '__main__':
     asg.amplitude = ag
     asg.offset = ao
 
-    # similar to asg.trig()
-    for attempt in range(5):
-        if s.curve_ready():
-            break
+    # turn on pid module
+    pid.i, pid.reg_integral = pid_i, pid_reg_integral
 
-        asg.trigger_source = 'immediately'
-        sleep(1.0)
-        asg.trigger_source = 'off'
-        sleep(0.1)
+    # last but not least turn on the asg
+    sequence_time = 1.0
+    asg.trigger_source = 'immediately'
+
+    sleep(sequence_time)
+    asg.trigger_source = 'off'
+
+    # wait for scope to finish
+    finish_time = s.trigger_delay + s.duration - sequence_time
+    if 0 < finish_time:
+        sleep(finish_time)
 
     # check that the trigger has been disarmed
     print('After turning on asg:')
