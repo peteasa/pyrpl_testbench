@@ -134,6 +134,8 @@ if __name__ == '__main__':
     # seconds to delay (s.trigger_delay would auto call_setup)
     trigger_delay = 0.010
 
+    # Can't pre capture more than s.duration / 2
+    trigger_delay = trigger_delay if -s.duration / 2 < trigger_delay else -s.duration / 2
     s.setup(trigger_source = trigger_source,
             trigger_delay = trigger_delay)
 
@@ -141,8 +143,8 @@ if __name__ == '__main__':
     curve = s.single_async()
 
     for i in range(2):
-        # wait for trigger to arm
-        arm_time = 4
+        # wait for pre trigger buffer to fill
+        arm_time = s.duration / 2
         trigger_prep = - s.trigger_delay if s.trigger_delay < 0 else 0
         sleep(arm_time + trigger_prep)
 
@@ -166,7 +168,7 @@ if __name__ == '__main__':
     asg.trigger_source = 'off'
 
     # wait for scope to finish
-    finish_time = s.trigger_delay + s.duration - sequence_time
+    finish_time = s.trigger_delay + s.duration / 2 - sequence_time
     if 0 < finish_time:
         sleep(finish_time)
 

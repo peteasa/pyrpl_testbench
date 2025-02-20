@@ -44,11 +44,15 @@ if __name__ == '__main__':
     trigger = -0.03
     hysteresis = 0.01
 
+    # s.sampling_time will auto call_setup
+    s.sampling_time = 1 / ( fg * requested_samples_per_cycle )
+
     # s.trigger_delay would auto call_setup
     trigger_delay = 0.2
 
-    # s.sampling_time would auto call_setup
-    sampling_time = 1 / ( fg * requested_samples_per_cycle )
+    # Can't pre capture more than s.duration / 2
+    trigger_delay = trigger_delay if -s.duration / 2 < trigger_delay else -s.duration / 2
+
     s.setup(threshold = trigger,
             hysteresis = hysteresis,
             trigger_source = 'ch1_negative_edge',
@@ -63,8 +67,8 @@ if __name__ == '__main__':
 
     results = s.single_async()
     for i in range(2):
-        # wait for trigger to arm
-        arm_time = 4
+        # wait for pre trigger buffer to fill
+        arm_time = s.duration / 2
         trigger_prep = - s.trigger_delay if s.trigger_delay < 0 else 0
         sleep(arm_time + trigger_prep)
 
@@ -84,7 +88,7 @@ if __name__ == '__main__':
     asg.trigger_source = 'off'
 
     # wait for scope to finish
-    finish_time = s.trigger_delay + s.duration - sequence_time
+    finish_time = s.trigger_delay + s.duration / 2 - sequence_time
     if 0 < finish_time:
         sleep(finish_time)
 
