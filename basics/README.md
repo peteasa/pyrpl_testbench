@@ -12,6 +12,9 @@ A good way to see the full capabilities of the pyrpl environment is to run and s
 python3 -m nose pyrpl
 ```
 Or more recently run pytest
+```
+pytest pyrpl/test
+```
 
 ## class Asg
 How to use the Arbitrary Signal Generator (Asg) module: see `asg_bursts.py`, `integ_dc.py`, `module_attributes.py`
