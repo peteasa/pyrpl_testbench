@@ -6,7 +6,7 @@ from pyrpl.async_utils import sleep
 from pyrpl.hardware_modules.asg import Asg0, Asg1
 
 if __name__ == '__main__':
-    HOSTNAME = 'rp-f0bd75'
+    HOSTNAME = 'rp-f0bd75' # change this to match your RedPitaya!
     CONFIG = 'basic.module_attribute'
     p = pyrpl.Pyrpl(config = '', hostname = HOSTNAME, gui = False, reloadfpga = True) # False)
     r = p.rp

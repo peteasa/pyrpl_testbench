@@ -11,38 +11,36 @@ A good way to see the full capabilities of the pyrpl environment is to run and s
 ```
 python3 -m nose pyrpl
 ```
+Or more recently run pytest
 
 ## class Asg
 How to use the Arbitrary Signal Generator (Asg) module: see `asg_bursts.py`, `integ_dc.py`, `module_attributes.py`
 How _not_ to use the Arbitrary Signal Generator (Asg) module: `integ_ac.py`
 
 ## class Scope
-See `module_attributes.py`, `integ_dc.py`
+See `module_attributes.py`, `integ_dc.py` and others!
 
 ## class Pid
 See `integ_dc.py`
 Uses FilterModule
 
-## class Pwm
-TODO
-
 ## class Iq
 See `netanalyser.py`
 
 ## class IIR
-See `filters.ipynb` and `filters.py`
+See `filters.ipynb` and `filters_basic.py`
 
 ## class DspModule
-TODO
+Perhaps the main feature of note in this module is the input mux used by many of the examples.
 
 ## class FilterModule
 See `specanalyser.py`
 
 ## class Sampler
-TODO
+This provides sampling and statistics.  See `trigger.py` for an example use of current_output_signal (dsp.py) that is an output from the FPGA sampler register 0x10 in red_pitaya_dsp.v
 
 ## class Trig
-TODO
+See `trigger.py`
 
 ## class SelectProperty
 This class provides an important method (change_options) that enables custom waveforms to be defined for use the the Arbitrary Signal Generator (Asg) module.  See `module_attributes.py`
@@ -59,8 +57,11 @@ This class typically requires external hardware to run so it is more difficult t
 ## class ModuleManager
 See `specanalyser.py`
 
-## class HK
-This class provides access to LED and other peripherals on the board.  TODO
+## class Pwm
+This class uses the same part of the FPGA as the Ams class.  See `pwm.py`
 
 ## class AMS
-This class provides access to the zynq analogue outputs.  TODO
+This class provides access to the slow analogue outputs. See ams.py
+
+## class HK
+This class provides access to LED and other peripherals on the board.  See hk.py

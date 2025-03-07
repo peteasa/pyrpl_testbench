@@ -360,7 +360,7 @@ class DummyP(object):
 
 class TestBench(Meta):
     def __init__(self, test):
-        HOSTNAME = 'rp-f0bd75'
+        HOSTNAME = 'rp-f0bd75' # change this to match your RedPitaya!
         #self._p = DummyP()
         #self._r = DummyR()
         self._p = pyrpl.Pyrpl(config = test.rpconf, hostname = HOSTNAME, gui = False)

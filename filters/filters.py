@@ -431,7 +431,7 @@ class DummyP(object):
 
 class TestBench(Meta):
     def __init__(self, test):
-        HOSTNAME = 'rp-f0bd75'
+        HOSTNAME = 'rp-f0bd75' # change this to match your RedPitaya!
 
         # for debug replace with DummyP / DummyR
         #self._p = DummyP()

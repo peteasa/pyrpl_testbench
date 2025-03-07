@@ -16,7 +16,7 @@ def prepare_to_show_plot(p):
             pass
 
 if __name__ == '__main__':
-    HOSTNAME = 'rp-f0bd75'
+    HOSTNAME = 'rp-f0bd75' # change this to match your RedPitaya!
     CONFIG = 'basic.netanalyser'
     p = pyrpl.Pyrpl(config = CONFIG, hostname = HOSTNAME, gui = False, reloadfpga = True) # False)
 

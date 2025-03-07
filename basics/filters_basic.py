@@ -11,7 +11,7 @@ def characterise_transfer_function(data, frequencies, condition):
     return fminidx_lo, fminidx_hi
 
 if __name__ == '__main__':
-    HOSTNAME = 'rp-f0bd75'
+    HOSTNAME = 'rp-f0bd75' # change this to match your RedPitaya!
     CONFIG = 'basic.filters'
     p = pyrpl.Pyrpl(config = CONFIG, hostname = HOSTNAME, gui = False, reloadfpga = True) # False)
     na = p.networkanalyzer

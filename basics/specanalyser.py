@@ -192,7 +192,7 @@ def characterise_spectrum(data, frequencies, condition):
     return amaxidx_lo, amaxidx, amaxidx_hi
 
 if __name__ == '__main__':
-    HOSTNAME = 'rp-f0bd75'
+    HOSTNAME = 'rp-f0bd75' # change this to match your RedPitaya!
     CONFIG = 'basic.specanalyser'
     p = pyrpl.Pyrpl(config = CONFIG, hostname = HOSTNAME, gui = False, reloadfpga = True) # False)
 
