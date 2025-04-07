@@ -8,6 +8,18 @@ Notably the numerical values used for poles and zeros in many online resources n
 This folder contains examples of filters that have been designed using the pyrpl IIR filter module. so that interested developers can quickly create working examples of the complex filters that they require.
 
 ## Note
-At the time of writing the author is not convinced that the IIR module is free of bugs.  One example of this is that the filters included in this section seem to require gain settings that are remarkably small.  Setting `gain = 1.0` in the pyrpl IIR module rarely produces a working filter.  The only example found so far is that of a notch filter.  As an example the simple high pass filter requires `gain = 1e-6` to ensure that the pass band gain is 1.0.  This may be a bug in this implmentation or it may be a bug in the IIR module or it may simply be working as designed.
+The PyRPL IIR filter design is a novel design that reduces the number of gates needed in the FPGA implementation.  You might see in my python code an attribute for configuring biproper (not just proper) poles / zeros conjugate pairs.  To use this option you also need to modify IirFilter::coefficients() as follows:
+```
+        zd = np.exp(np.asarray(z, dtype=np.complex128)*self.dt*self.loops)
+        pd = np.exp(np.asarray(p, dtype=np.complex128)*self.dt*self.loops)
+        if self.biproper:
+            logger.debug('z-plane number of zeros: {} number of poles: {}'.format(zd.shape, pd.shape))
+            while len(zd) < len(pd):
+                zd = np.append(zd, complex(-1, 0))
+                logger.debug('ensure H[z] = 0 at highest frequency: adding z-plane zero at (-1+j0)')
+
+        rd, cd = residues(zd, pd, k)
+```
+The while loop in this code adds zeros at z = -1 to make the system a biproper system.  You can find a discussion about this in Neil Robertson's blog [Design IIR Butterworth Filters](https://www.dsprelated.com/showarticle/1119.php).  The reason why I have not yet released this change is that it only has an effect at very high frequencies. At high frequencies there are other more prominant effects (notably the delay through the filter) that have to be taken into account to correctly model the IIR filter.  You can find more discussion about the detailed design in one of my [dsp stackexchange questions](https://dsp.stackexchange.com/questions/95906/how-to-debug-this-biquad-iir-filter-that-uses-polyphase-decimation).  If you would like me to release this let me know via the discussion pages and I will do the work needed to push the changes to this testbench and to my version of PyRPL.
 
 Comments are always welcome!
