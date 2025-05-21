@@ -40,7 +40,7 @@ Perhaps the main feature of note in this module is the input mux used by many of
 See `specanalyser.py`
 
 ## class Sampler
-This provides sampling and statistics.  See `trigger.py` for an example use of current_output_signal (dsp.py) that is an output from the FPGA sampler register 0x10 in red_pitaya_dsp.v
+This provides sampling and statistics.  See `trigger.py` for an example use of current_output_signal (`dsp.py`) that is an output from the FPGA sampler register 0x10 in `red_pitaya_dsp.v`
 
 ## class Trig
 See `trigger.py`
@@ -64,7 +64,7 @@ See `specanalyser.py`
 This class uses the same part of the FPGA as the Ams class.  See `pwm.py`
 
 ## class AMS
-This class provides access to the slow analogue outputs. See ams.py
+This class provides access to the slow analogue outputs. See `ams.py`
 
 ## class HK
-This class provides access to LED and other peripherals on the board.  See hk.py
+This class provides access to LED and other peripherals on the board.  See `hk.py`
