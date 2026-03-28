@@ -6,13 +6,13 @@ The testbench allows you to create simple projects with sequences of operations 
 
 ## Feedback is welcome!
 
-If you are interested in this testbench or my [consolidate_python3 branch](https://github.com/peteasa/pyrpl/tree/consolidate_python3) that I used, have a look at the [Discussions](https://github.com/peteasa/pyrpl_testbench/discussions) or raise an [Issue](https://github.com/peteasa/pyrpl_testbench/issues). If you want to participate in the development of PyRPL, or get the latest official version of PyRPL visit the [official project](https://github.com/pyrpl-fpga/pyrpl) page.
+If you are interested in this testbench, have a look at the [Discussions](https://github.com/peteasa/pyrpl_testbench/discussions) or raise an [Issue](https://github.com/peteasa/pyrpl_testbench/issues). If you want to participate in the development of PyRPL, or get the latest official version of PyRPL visit the [official project](https://github.com/pyrpl-fpga/pyrpl) page.
 
 ## PyRPL
 The official PyRPL website address is [http://pyrpl.readthedocs.io/](http://pyrpl.readthedocs.io).  The official PyRPL software is available at [https://github.com/RedPitaya/pyrpl](https://github.com/RedPitaya/pyrpl).  Note: [https://github.com/RedPitaya/pyrpl](https://github.com/RedPitaya/pyrpl) will follow the [https://github.com/pyrpl-fpga/pyrpl](https://github.com/pyrpl-fpga/pyrpl).  So if you want the latest official releases look to those two repositories.  At the time of writing the [https://github.com/pyrpl-fpga/pyrpl](https://github.com/pyrpl-fpga/pyrpl) is more up to date for python3 code.
 
 ## Installation
-The simplest way to install PyRPL on Ubuntu 24.04.1 is to clone https://github.com/peteasa/pyrpl to a suitable location and then checkout the [consolidate_python3 branch](https://github.com/peteasa/pyrpl/tree/consolidate_python3) then install the necessary python libraries
+The simplest way to install PyRPL is to follow the official [install steps](https://pyrpl.readthedocs.io/en/latest/installation.html).  I choose to do things slightly differently and using Ubuntu 24.04.1 I clone pyrpl to a suitable location and then checkout the branch that I wish to work with and then install the necessary libraries
 ```
 sudo apt install python3-ipython python3-numpy python3-pandas python3-scp python3-paramiko python3-scipy python3-ruamel.yaml python3-qtpy python3-qasync python3-pyqtgraph python3-nest-asyncio python3-matplotlib python3-yaml
 ```
@@ -21,7 +21,7 @@ The folder pyrpl/pyrpl contains the python library modules for PyRPL.  These can
 cd pyrpl_testbench/mohm
 ln -s ../../pyrpl/pyrpl .
 ```
-Other installation methods may work better for you, some may or may not work for Python3.
+Other installation methods may work better for you.
 
 ## TestBench API
 One of the objectives of the TestBench is to encourage the creation of small modular methods that perform a specific task, for example the setting up of an PyRPL module.  If this is achieved in any one test design then it will be possible to reuse those modules easily in another test design.  The TestBench and associated classes are kept as simple as possible so that they can be used in multiple designs.
@@ -85,15 +85,15 @@ for i in range(t.max_iter):
 ```
 
 ## PyRPL calibration
-One important element missing from the toolbox provided by the PyRPL code is a calibration module for the RedPitaya tools. Calibration is a complicated subject and is best documented [here](https://redpitaya.readthedocs.io/en/latest/appsFeatures/systemtool/calibration.html) and [here](https://redpitaya.readthedocs.io/en/latest/developerGuide/hardware/hw_specs/fastIO.html#analog-inputs-calibration).  The internal RedPitaya calibration coefficients are not available to the PyRPL code and if they were the more complicated tools available with the PyRPL code may not be easy to calibrate.  Having said that it is useful to have a simple calibration object when using the PyRPL code.  The TestBench provides access (t.c) to some simple calibration tools.
+One important element missing from the toolbox provided by the PyRPL code is a calibration module for the RedPitaya tools. Calibration is a complicated subject and is best documented [here](https://redpitaya.readthedocs.io/en/latest/appsFeatures/systemtool/calibration.html#technical-reference) and [here](https://redpitaya.readthedocs.io/en/latest/developerGuide/hardware/ORIG_GEN/measurements/STEMlab-125-14/fast_analog_inputs.html#analog-inputs-calibration).  The internal RedPitaya calibration coefficients are not available to the PyRPL code and if they were the more complicated tools available with the PyRPL code may not be easy to calibrate.  Having said that it is useful to have a simple calibration object when using the PyRPL code.  The TestBench provides access (t.c) to some simple calibration tools.  Rather than use EEPROM, the TestBench calibration uses a .json file to save calibration data.
 
 Also provided is a python application that defines the simple calibration protocol.  calibration/calibrate.py provide another example use of the TestBench.
 
 ## Versions tested
 
-RedPitaya OS 2.0: Latest Beta (2.05-37) Install 2.00-37 - Branch 2024.3
+RedPitaya OS 2.0: Latest Stable (2.07-48)
 Python is 3.12.3
-pyrpl 1.0.0.0 using
+pyrpl 0.9.8.0 using
   IPython 8.20.0
   numpy 1.26.4
   pandas 2.1.4
@@ -106,7 +106,7 @@ pyrpl 1.0.0.0 using
 
 ## Acknowledgements
 Many thanks to the RedPitaya team.  Without the excellent hardware and software provided none of this would be possible.
-I would also like to acknowledge Leonhard Neuhaus, the original author of the PyRPL software, a truly world class toolbox of tools to use with the RedPitaya hardware.
+I would also like to acknowledge Leonhard Neuhaus, the original author of the PyRPL software and Michael Croquette for maintining, a truly world class toolbox of tools to use with the RedPitaya hardware.
 The mohm test software was developed in response to K.G Libbrecht et al paper DOI[10.1119/1.1579497](https://pubs.aip.org/aapt/ajp/article-abstract/71/11/1208/1029926/A-basic-lock-in-amplifier-experiment-for-the?redirectedFrom=fulltext) A basic lock-in amplifier experiment for the undergraduate laboratory
 
 ## License
