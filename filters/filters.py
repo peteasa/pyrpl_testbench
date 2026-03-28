@@ -532,7 +532,10 @@ class MeasureTransferFunction(Meta):
 
         super().__init__()
 
-    def measure_multi_zone(self, zones = [], dbs_min_zone = 0, dbs_max_zone = 0, aminidx_zone = 0, amaxidx_zone = 0):
+    def measure_multi_zone(self, zones = None, dbs_min_zone = 0, dbs_max_zone = 0, aminidx_zone = 0, amaxidx_zone = 0):
+        if zones is None:
+            zones = []
+
         dbs_minidx = np.argmin(self.tf_abs.min())
         dbs_maxidx = np.argmax(self.tf_abs.max())
 
