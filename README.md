@@ -106,7 +106,7 @@ pyrpl 0.9.8.0 using
 
 ## Acknowledgements
 Many thanks to the RedPitaya team.  Without the excellent hardware and software provided none of this would be possible.
-I would also like to acknowledge Leonhard Neuhaus, the original author of the PyRPL software and Michael Croquette for maintining, a truly world class toolbox of tools to use with the RedPitaya hardware.
+I would also like to acknowledge Leonhard Neuhaus, the original author of the PyRPL software and Michael Croquette for maintaining, a truly world class toolbox of tools to use with the RedPitaya hardware.
 The mohm test software was developed in response to K.G Libbrecht et al paper DOI[10.1119/1.1579497](https://pubs.aip.org/aapt/ajp/article-abstract/71/11/1208/1029926/A-basic-lock-in-amplifier-experiment-for-the?redirectedFrom=fulltext) A basic lock-in amplifier experiment for the undergraduate laboratory
 
 ## License
